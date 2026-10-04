@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import jakarta.validation.Valid;
 
 import com.openstudy.openstudy.model.StudySession;
 import com.openstudy.openstudy.service.StudySessionService;
@@ -32,22 +33,16 @@ public class StudySessionController {
     @PostMapping
     public ResponseEntity<?> createSession(
             @PathVariable Long studentId,
-            @RequestBody StudySession session) {
-        try {
-            session.setStudentId(studentId);
-            StudySession created = sessionService.createSession(session);
-            return ResponseEntity.status(HttpStatus.CREATED).body(created);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest()
-                    .body(Map.of("error", e.getMessage()));
-        }
+            @Valid @RequestBody StudySession session) {
+        session.setStudentId(studentId);
+        StudySession created = sessionService.createSession(session);
+        return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
     @GetMapping
     public ResponseEntity<List<StudySession>> getSessions(
             @PathVariable Long studentId) {
-        return ResponseEntity.ok(
-                sessionService.getSessions(studentId));
+        return ResponseEntity.ok(sessionService.getSessions(studentId));
     }
 
     @GetMapping("/{sessionId}")
@@ -68,24 +63,14 @@ public class StudySessionController {
     public ResponseEntity<?> updateSession(
             @PathVariable Long studentId,
             @PathVariable Long sessionId,
-            @RequestBody StudySession session) {
-        try {
-            session.setStudentId(studentId);
-            session.setSessionId(sessionId);
-
-            boolean updated =
-                    sessionService.updateSession(session);
-
-            if (!updated) {
-                return ResponseEntity.notFound().build();
-            }
-
-            return ResponseEntity.ok(
-                    Map.of("message", "Study session updated successfully"));
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest()
-                    .body(Map.of("error", e.getMessage()));
+            @Valid @RequestBody StudySession session) {
+        session.setStudentId(studentId);
+        session.setSessionId(sessionId);
+        boolean updated = sessionService.updateSession(session);
+        if (!updated) {
+            return ResponseEntity.notFound().build();
         }
+        return ResponseEntity.ok(java.util.Map.of("message", "Study session updated successfully"));
     }
 
     @DeleteMapping("/{sessionId}")

@@ -2,14 +2,21 @@
 package com.openstudy.openstudy.model;
 
 import java.time.LocalDateTime;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 
 public class StudySession {
 
     private Long sessionId;
+    @Positive(message = "Student ID must be positive.")
     private Long studentId;
+    @Positive(message = "Subject ID must be positive.")
     private Long subjectId;
+    @Positive(message = "Assignment ID must be positive.")
     private Long assignmentId;
+    @NotNull(message = "Start time is required.")
     private LocalDateTime startTime;
+    @NotNull(message = "End time is required.")
     private LocalDateTime endTime;
     private String notes;
     private LocalDateTime createdAt;

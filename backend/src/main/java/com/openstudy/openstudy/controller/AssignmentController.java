@@ -2,7 +2,6 @@
 package com.openstudy.openstudy.controller;
 
 import java.util.List;
-import java.util.Map;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -14,6 +13,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import jakarta.validation.Valid;
 
 import com.openstudy.openstudy.model.Assignment;
 import com.openstudy.openstudy.service.AssignmentService;
@@ -32,36 +32,18 @@ public class AssignmentController {
     @PostMapping
     public ResponseEntity<?> createAssignment(
             @PathVariable Long studentId,
-            @RequestBody Assignment assignment) {
-        try {
-            assignment.setStudentId(studentId);
-
-            Assignment saved =
-                    assignmentService.createAssignment(assignment);
-
-            return ResponseEntity.status(HttpStatus.CREATED)
-                    .body(saved);
-
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest()
-                    .body(Map.of("error", e.getMessage()));
-        }
+            @Valid @RequestBody Assignment assignment) {
+        assignment.setStudentId(studentId);
+        Assignment saved = assignmentService.createAssignment(assignment);
+        return ResponseEntity.status(HttpStatus.CREATED).body(saved);
     }
 
     // Get all assignments for a student
     @GetMapping
     public ResponseEntity<?> getAssignments(
             @PathVariable Long studentId) {
-        try {
-            List<Assignment> assignments =
-                    assignmentService.getAssignments(studentId);
-
-            return ResponseEntity.ok(assignments);
-
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest()
-                    .body(Map.of("error", e.getMessage()));
-        }
+        List<Assignment> assignments = assignmentService.getAssignments(studentId);
+        return ResponseEntity.ok(assignments);
     }
 
     // Get one assignment
@@ -69,18 +51,9 @@ public class AssignmentController {
     public ResponseEntity<?> getAssignment(
             @PathVariable Long studentId,
             @PathVariable Long assignmentId) {
-        try {
-            return assignmentService
-                    .getAssignment(assignmentId, studentId)
-                    .<ResponseEntity<?>>map(ResponseEntity::ok)
-                    .orElseGet(() -> ResponseEntity.status(
-                            HttpStatus.NOT_FOUND).body(
-                            Map.of("error", "Assignment not found.")));
-
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest()
-                    .body(Map.of("error", e.getMessage()));
-        }
+        return assignmentService.getAssignment(assignmentId, studentId)
+                .<ResponseEntity<?>>map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     // Update an assignment
@@ -88,26 +61,14 @@ public class AssignmentController {
     public ResponseEntity<?> updateAssignment(
             @PathVariable Long studentId,
             @PathVariable Long assignmentId,
-            @RequestBody Assignment assignment) {
-        try {
-            assignment.setAssignmentId(assignmentId);
-            assignment.setStudentId(studentId);
-
-            boolean updated =
-                    assignmentService.updateAssignment(assignment);
-
-            if (!updated) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body(Map.of("error", "Assignment not found."));
-            }
-
-            return ResponseEntity.ok(
-                    Map.of("message", "Assignment updated successfully."));
-
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest()
-                    .body(Map.of("error", e.getMessage()));
+            @Valid @RequestBody Assignment assignment) {
+        assignment.setAssignmentId(assignmentId);
+        assignment.setStudentId(studentId);
+        boolean updated = assignmentService.updateAssignment(assignment);
+        if (!updated) {
+            return ResponseEntity.notFound().build();
         }
+        return ResponseEntity.ok(java.util.Map.of("message", "Assignment updated successfully."));
     }
 
     // Delete an assignment
@@ -115,21 +76,10 @@ public class AssignmentController {
     public ResponseEntity<?> deleteAssignment(
             @PathVariable Long studentId,
             @PathVariable Long assignmentId) {
-        try {
-            boolean deleted = assignmentService
-                    .deleteAssignment(assignmentId, studentId);
-
-            if (!deleted) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body(Map.of("error", "Assignment not found."));
-            }
-
-            return ResponseEntity.ok(
-                    Map.of("message", "Assignment deleted successfully."));
-
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest()
-                    .body(Map.of("error", e.getMessage()));
+        boolean deleted = assignmentService.deleteAssignment(assignmentId, studentId);
+        if (!deleted) {
+            return ResponseEntity.notFound().build();
         }
+        return ResponseEntity.ok(java.util.Map.of("message", "Assignment deleted successfully."));
     }
 }

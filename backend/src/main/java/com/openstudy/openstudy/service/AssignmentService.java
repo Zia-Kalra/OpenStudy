@@ -4,16 +4,20 @@ package com.openstudy.openstudy.service;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.nio.charset.StandardCharsets;
 
 import org.springframework.stereotype.Service;
 
 import com.openstudy.openstudy.model.Assignment;
 import com.openstudy.openstudy.repository.AssignmentRepository;
+import com.openstudy.openstudy.repository.PlannerReferenceRepository;
+import com.openstudy.openstudy.exception.ResourceNotFoundException;
 
 @Service
 public class AssignmentService {
 
     private final AssignmentRepository assignmentRepository;
+    private final PlannerReferenceRepository references;
 
     private static final Set<String> VALID_PRIORITIES =
             Set.of("LOW", "MEDIUM", "HIGH");
@@ -21,25 +25,18 @@ public class AssignmentService {
     private static final Set<String> VALID_STATUSES =
             Set.of("PENDING", "IN_PROGRESS", "COMPLETED");
 
-    public AssignmentService(AssignmentRepository assignmentRepository) {
+    public AssignmentService(AssignmentRepository assignmentRepository,
+            PlannerReferenceRepository references) {
         this.assignmentRepository = assignmentRepository;
+        this.references = references;
     }
 
     // Validate and create an assignment
     public Assignment createAssignment(Assignment assignment) {
         validateAssignment(assignment);
-
-        if (assignment.getStudentId() == null) {
-            throw new IllegalArgumentException(
-                    "Student ID is required."
-            );
-        }
-
-        if (assignment.getStudentId() <= 0) {
-            throw new IllegalArgumentException(
-                    "Student ID must be positive."
-            );
-        }
+        validateStudentId(assignment.getStudentId());
+        requireStudent(assignment.getStudentId());
+        validateSubject(assignment.getSubjectId(), assignment.getStudentId());
 
         return assignmentRepository.save(assignment);
     }
@@ -47,6 +44,7 @@ public class AssignmentService {
     // Get all assignments belonging to a student
     public List<Assignment> getAssignments(Long studentId) {
         validateStudentId(studentId);
+        requireStudent(studentId);
 
         return assignmentRepository.findByStudentId(studentId);
     }
@@ -57,6 +55,7 @@ public class AssignmentService {
 
         validateStudentId(studentId);
         validateAssignmentId(assignmentId);
+        requireStudent(studentId);
 
         return assignmentRepository.findByIdAndStudentId(
                 assignmentId, studentId
@@ -68,6 +67,8 @@ public class AssignmentService {
         validateAssignment(assignment);
         validateAssignmentId(assignment.getAssignmentId());
         validateStudentId(assignment.getStudentId());
+        requireStudent(assignment.getStudentId());
+        validateSubject(assignment.getSubjectId(), assignment.getStudentId());
 
         return assignmentRepository.update(assignment);
     }
@@ -78,6 +79,7 @@ public class AssignmentService {
 
         validateAssignmentId(assignmentId);
         validateStudentId(studentId);
+        requireStudent(studentId);
 
         return assignmentRepository.delete(
                 assignmentId, studentId
@@ -97,6 +99,11 @@ public class AssignmentService {
             throw new IllegalArgumentException(
                     "Assignment title is required."
             );
+        }
+
+        if (assignment.getDescription() != null
+                && assignment.getDescription().getBytes(StandardCharsets.UTF_8).length > 65_535) {
+            throw new IllegalArgumentException("Assignment description exceeds the database text limit.");
         }
 
         if (assignment.getTitle().length() > 150) {
@@ -133,6 +140,18 @@ public class AssignmentService {
             throw new IllegalArgumentException(
                     "A valid student ID is required."
             );
+        }
+    }
+
+    private void requireStudent(Long studentId) {
+        if (!references.studentExists(studentId)) {
+            throw new ResourceNotFoundException("Student not found.");
+        }
+    }
+
+    private void validateSubject(Long subjectId, Long studentId) {
+        if (subjectId != null && !references.subjectBelongsToStudent(subjectId, studentId)) {
+            throw new ResourceNotFoundException("Subject not found for this student.");
         }
     }
 
