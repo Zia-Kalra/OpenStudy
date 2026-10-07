@@ -32,6 +32,9 @@ replay_pid*
 .env.*
 application-local.properties
 
+# R analytics outputs are regenerated from the live database
+r/output/
+
 # IDE files
 .vscode/
 .idea/
