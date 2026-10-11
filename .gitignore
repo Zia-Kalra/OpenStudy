@@ -1,16 +1,30 @@
-# Compiled class file
+
+# ==========================================
+# Java compiled files
+# ==========================================
 *.class
 
-# Log file
+# ==========================================
+# Logs and crash reports
+# ==========================================
 *.log
+hs_err_pid*
+replay_pid*
 
-# BlueJ files
+# ==========================================
+# BlueJ and J2ME
+# ==========================================
 *.ctxt
-
-# Mobile Tools for Java (J2ME)
 .mtj.tmp/
 
-# Package Files #
+# ==========================================
+# Java / Maven build output
+# ==========================================
+**/target/
+
+# ==========================================
+# Java package archives
+# ==========================================
 *.jar
 *.war
 *.nar
@@ -19,27 +33,30 @@
 *.tar.gz
 *.rar
 
-# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
-hs_err_pid*
-replay_pid*
-
-# Java / Maven
-**/target/
-*.class
-
+# ==========================================
 # Secrets and environment files
+# ==========================================
 .env
 .env.*
+!.env.example
 application-local.properties
 
+# Private keys and certificates
+*.pem
+*.key
+*.p12
+*.jks
+backend/certs/
+
+# ==========================================
 # IDE files
+# ==========================================
 .vscode/
 .idea/
 *.iml
 
-# Logs
-*.log
-
-# OS files
+# ==========================================
+# Operating system files
+# ==========================================
 .DS_Store
 Thumbs.db
