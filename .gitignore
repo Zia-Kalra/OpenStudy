@@ -40,11 +40,31 @@ replay_pid*
 .env.*
 !.env.example
 application-local.properties
+application-local*.properties
+application-local*.yml
+application-local*.yaml
+application-secrets*.properties
+application-secrets*.yml
+application-secrets*.yaml
 
 # Private keys and certificates
 *.pem
 *.key
 *.p12
+*.pfx
+*.pkcs12
+*.keystore
+*.jceks
+*.ppk
+*.p8
+*.pk8
+*.pkcs8
+id_rsa
+id_ecdsa
+id_ed25519
+*.der
+*.crt
+*.cer
 *.jks
 backend/certs/
 
