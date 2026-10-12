@@ -1,10 +1,12 @@
 package com.openstudy.openstudy.controller;
 
+import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@Profile("!mock")
 public class DatabaseTestController {
 
     private final JdbcTemplate jdbcTemplate;

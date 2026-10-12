@@ -73,6 +73,16 @@ Windows:
 
 If the database environment variables are not configured, the application may fail to start. Configure them before running the application.
 
+Teacher Dashboard (Member 5) can be started without MySQL using the `mock` profile:
+
+```powershell
+.\backend\mvnw.cmd -f backend\pom.xml spring-boot:run "-Dspring-boot.run.profiles=mock"
+```
+
+Open http://localhost:8080/teacher/dashboard
+
+Integration notes: `docs/member5-integration.md`
+
 ## 6. Database Guidelines
 
 - Use the agreed database schema and migrations.
