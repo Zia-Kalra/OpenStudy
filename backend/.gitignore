@@ -31,3 +31,6 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# Aiven SSL certificate and Java truststore
+certs/*
