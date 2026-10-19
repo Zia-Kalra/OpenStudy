@@ -71,6 +71,15 @@ public class DatabaseAuthService implements AuthService {
 
     @Override
     public User registerStudent(String fullName, String email, String password) {
+        return registerUser(fullName, email, password, "student");
+    }
+
+    @Override
+    public User registerUser(String fullName, String email, String password, String role) {
+        String normalizedRole = role == null ? "" : role.trim().toUpperCase(Locale.ROOT);
+        if (!normalizedRole.equals("STUDENT") && !normalizedRole.equals("TEACHER")) {
+            throw new IllegalArgumentException("Choose either the student or teacher account type.");
+        }
         String normalizedName = fullName.trim();
         String normalizedEmail = normalizeEmail(email);
         String encodedPassword = passwordEncoder.encode(password);
@@ -78,11 +87,12 @@ public class DatabaseAuthService implements AuthService {
         PreparedStatementCreator statement = connection -> {
             PreparedStatement preparedStatement = connection.prepareStatement(
                     "INSERT INTO users (full_name, email, password_hash, role, account_status) "
-                            + "VALUES (?, ?, ?, 'STUDENT', 'ACTIVE')",
+                            + "VALUES (?, ?, ?, ?, 'ACTIVE')",
                     Statement.RETURN_GENERATED_KEYS);
             preparedStatement.setString(1, normalizedName);
             preparedStatement.setString(2, normalizedEmail);
             preparedStatement.setString(3, encodedPassword);
+            preparedStatement.setString(4, normalizedRole);
             return preparedStatement;
         };
         try {
@@ -94,7 +104,8 @@ public class DatabaseAuthService implements AuthService {
         if (generatedId == null) {
             throw new IllegalStateException("The database did not return a generated account ID.");
         }
-        return new User(generatedId.longValue(), normalizedName, normalizedEmail, encodedPassword, "student", "ACTIVE");
+        return new User(generatedId.longValue(), normalizedName, normalizedEmail, encodedPassword,
+                normalizedRole.toLowerCase(Locale.ROOT), "ACTIVE");
     }
 
     @Override

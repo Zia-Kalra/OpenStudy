@@ -42,7 +42,11 @@ public class AuthController {
     }
 
     @GetMapping("/signup")
-    public String signupPage() {
+    public String signupPage(@RequestParam(value = "role", defaultValue = "student") String role, Model model) {
+        String selectedRole = normalizeRole(role);
+        if (selectedRole == null) selectedRole = "student";
+        model.addAttribute("accountRole", selectedRole);
+        model.addAttribute("accountRoleLabel", "teacher".equals(selectedRole) ? "Teacher" : "Student");
         return "student/signup";
     }
 
@@ -52,38 +56,57 @@ public class AuthController {
             @RequestParam String email,
             @RequestParam String password,
             @RequestParam String confirmPassword,
+            @RequestParam(defaultValue = "student") String role,
             HttpSession session,
             RedirectAttributes redirectAttributes) {
+        String selectedRole = normalizeRole(role);
+        if (selectedRole == null) {
+            redirectAttributes.addFlashAttribute("errorMessage", "Choose either Student or Teacher.");
+            return "redirect:/signup?role=student";
+        }
         String name = fullName.trim();
         String normalizedEmail = email.trim();
         if (name.isEmpty() || name.length() > 150 || normalizedEmail.length() > 254
                 || !normalizedEmail.matches("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")
-                || password.length() < 12 || password.length() > 72) {
+                || password.length() < 8 || password.length() > 72) {
             redirectAttributes.addFlashAttribute("errorMessage",
-                    "Enter a valid name and email. Passwords must be 12 to 72 characters.");
-            return "redirect:/signup";
+                    "Enter a valid name and email. Passwords must be 8 to 72 characters.");
+            return signupRedirect(selectedRole);
         }
         if (!password.equals(confirmPassword)) {
             redirectAttributes.addFlashAttribute("errorMessage", "The passwords do not match.");
-            return "redirect:/signup";
+            return signupRedirect(selectedRole);
         }
         try {
-            User user = authService.registerStudent(name, normalizedEmail, password);
+            User user = "student".equals(selectedRole)
+                    ? authService.registerStudent(name, normalizedEmail, password)
+                    : authService.registerUser(name, normalizedEmail, password, selectedRole);
             session.setAttribute("loggedInUser", user);
             session.setAttribute("userRole", user.getRole());
+            // Keep the identity aliases used by assignment APIs in sync with login state.
+            session.setAttribute("user", user);
+            session.setAttribute("userId", user.getUserId());
+            session.setAttribute("role", user.getRole());
             redirectAttributes.addFlashAttribute("newAccountId", user.getUserId());
-            return "redirect:/student/dashboard";
+            return "teacher".equalsIgnoreCase(user.getRole())
+                    ? "redirect:/teacher/dashboard" : "redirect:/student/dashboard";
         } catch (IllegalArgumentException exception) {
             redirectAttributes.addFlashAttribute("errorMessage", exception.getMessage());
-            return "redirect:/signup";
+            return signupRedirect(selectedRole);
         } catch (UnsupportedOperationException exception) {
             redirectAttributes.addFlashAttribute("errorMessage", "Sign-up requires the database-backed profile. Start the app without the mock profile.");
-            return "redirect:/signup";
+            return signupRedirect(selectedRole);
         } catch (RuntimeException exception) {
-            LOGGER.error("Student sign-up failed.", exception);
+            LOGGER.error("Account sign-up failed.", exception);
             redirectAttributes.addFlashAttribute("errorMessage", "Sign-up is unavailable. Check the database connection and try again.");
-            return "redirect:/signup";
+            return signupRedirect(selectedRole);
         }
+    }
+
+    // Retained for existing direct controller callers that create a student account.
+    public String signup(String fullName, String email, String password, String confirmPassword,
+            HttpSession session, RedirectAttributes redirectAttributes) {
+        return signup(fullName, email, password, confirmPassword, "student", session, redirectAttributes);
     }
 
     @GetMapping("/forgot-password")
@@ -119,8 +142,8 @@ public class AuthController {
             @RequestParam String password,
             @RequestParam String confirmPassword,
             RedirectAttributes redirectAttributes) {
-        if (password.length() < 12 || password.length() > 72) {
-            redirectAttributes.addFlashAttribute("errorMessage", "Password must be 12 to 72 characters.");
+        if (password.length() < 8 || password.length() > 72) {
+            redirectAttributes.addFlashAttribute("errorMessage", "Password must be 8 to 72 characters.");
             return "redirect:/reset-password?token=" + token;
         }
         if (!password.equals(confirmPassword)) {
@@ -156,6 +179,9 @@ public class AuthController {
 
         session.setAttribute("loggedInUser", user);
         session.setAttribute("userRole", user.getRole());
+        session.setAttribute("user", user);
+        session.setAttribute("userId", user.getUserId());
+        session.setAttribute("role", user.getRole());
 
         if ("teacher".equalsIgnoreCase(user.getRole())) {
             return "redirect:/teacher/dashboard";
@@ -167,5 +193,15 @@ public class AuthController {
     public String logout(HttpSession session) {
         session.invalidate();
         return "redirect:/login?error=loggedOut";
+    }
+
+    private static String normalizeRole(String role) {
+        if (role == null) return null;
+        String normalized = role.trim().toLowerCase();
+        return normalized.equals("student") || normalized.equals("teacher") ? normalized : null;
+    }
+
+    private static String signupRedirect(String role) {
+        return "teacher".equals(role) ? "redirect:/signup?role=teacher" : "redirect:/signup";
     }
 }

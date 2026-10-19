@@ -19,13 +19,13 @@ prefix="c" uri="jakarta.tags.core" %>
             <div class="logo-mark">OS</div>
             <h1 class="logo-text">OpenStudy</h1>
           </div>
-          <p>Create your student account and start learning with OpenStudy.</p>
+          <p>Create your <c:out value="${accountRoleLabel}" /> account and get started with OpenStudy.</p>
         </div>
         <div class="book-illustration" aria-hidden="true"></div>
       </aside>
       <main class="login-form-panel">
         <div class="login-form">
-          <h2>Create account</h2>
+          <h2>Create <c:out value="${accountRoleLabel}" /> account</h2>
           <div class="subtitle">
             Your account ID is generated when your account is saved.
           </div>
@@ -38,6 +38,7 @@ prefix="c" uri="jakarta.tags.core" %>
             method="post"
             action="${pageContext.request.contextPath}/signup"
           >
+            <input type="hidden" name="role" value="<c:out value='${accountRole}' />" />
             <label class="input-wrap">
               <span class="field-icon" aria-hidden="true">●</span>
               <input
@@ -65,9 +66,9 @@ prefix="c" uri="jakarta.tags.core" %>
               <input
                 type="password"
                 name="password"
-                minlength="12"
+                minlength="8"
                 maxlength="72"
-                placeholder="Password (12 or more characters)"
+                placeholder="Password (8 or more characters)"
                 autocomplete="new-password"
                 required
               />
@@ -77,7 +78,7 @@ prefix="c" uri="jakarta.tags.core" %>
               <input
                 type="password"
                 name="confirmPassword"
-                minlength="12"
+                minlength="8"
                 maxlength="72"
                 placeholder="Confirm password"
                 autocomplete="new-password"
@@ -85,7 +86,7 @@ prefix="c" uri="jakarta.tags.core" %>
               />
             </label>
             <button type="submit" class="login-btn">
-              Create Student Account
+              Create <c:out value="${accountRoleLabel}" /> Account
             </button>
           </form>
           <div class="account-link">
