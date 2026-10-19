@@ -29,11 +29,11 @@
                         <input type="hidden" name="token" value="<c:out value='${resetToken}' />">
                         <label class="input-wrap">
                             <span class="field-icon" aria-hidden="true">🔒</span>
-                            <input type="password" name="password" minlength="12" maxlength="72" placeholder="New password" autocomplete="new-password" required>
+                            <input type="password" name="password" minlength="8" maxlength="72" placeholder="New password" autocomplete="new-password" required>
                         </label>
                         <label class="input-wrap">
                             <span class="field-icon" aria-hidden="true">🔒</span>
-                            <input type="password" name="confirmPassword" minlength="12" maxlength="72" placeholder="Confirm new password" autocomplete="new-password" required>
+                            <input type="password" name="confirmPassword" minlength="8" maxlength="72" placeholder="Confirm new password" autocomplete="new-password" required>
                         </label>
                         <button type="submit" class="login-btn">Update Password</button>
                     </form>

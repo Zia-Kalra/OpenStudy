@@ -8,6 +8,13 @@ public interface AuthService {
 
     User registerStudent(String fullName, String email, String password);
 
+    default User registerUser(String fullName, String email, String password, String role) {
+        if (role != null && "student".equalsIgnoreCase(role.trim())) {
+            return registerStudent(fullName, email, password);
+        }
+        throw new UnsupportedOperationException("This authentication provider does not support teacher registration.");
+    }
+
     void sendPasswordReset(String email, String resetUrl);
 
     boolean isResetTokenValid(String token);

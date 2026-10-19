@@ -55,6 +55,7 @@ prefix="c" uri="jakarta.tags.core" %>
                 type="email"
                 name="email"
                 aria-label="Email address"
+                placeholder="Email address"
                 autocomplete="username"
                 required
               />
@@ -66,6 +67,7 @@ prefix="c" uri="jakarta.tags.core" %>
                 type="password"
                 name="password"
                 aria-label="Password"
+                placeholder="Password"
                 autocomplete="current-password"
                 required
               />
@@ -82,21 +84,26 @@ prefix="c" uri="jakarta.tags.core" %>
 
             <div class="account-link">
               Don't have an account?
-              <a href="${pageContext.request.contextPath}/signup">Sign up</a>
+              <a id="signup-link" href="${pageContext.request.contextPath}/signup?role=student">Sign up</a>
             </div>
           </form>
 
           <script>
             document.addEventListener("DOMContentLoaded", function () {
               const roleInput = document.getElementById("login-role");
+              const signupLink = document.getElementById("signup-link");
               const buttons = document.querySelectorAll(".role-btn");
+              function setRole(role) {
+                roleInput.value = role;
+                signupLink.href = "${pageContext.request.contextPath}/signup?role=" + encodeURIComponent(role);
+              }
               buttons.forEach(function (button) {
                 button.addEventListener("click", function () {
                   buttons.forEach(function (btn) {
                     btn.classList.remove("active");
                   });
                   button.classList.add("active");
-                  roleInput.value = button.dataset.role;
+                  setRole(button.dataset.role);
                 });
               });
             });
