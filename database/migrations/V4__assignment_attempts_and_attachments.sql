@@ -24,3 +24,6 @@ CREATE TABLE assignment_attachments (
         FOREIGN KEY (submission_id) REFERENCES assignment_submissions(submission_id)
         ON UPDATE RESTRICT ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+ALTER TABLE subjects
+    MODIFY COLUMN student_id BIGINT NULL;

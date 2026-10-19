@@ -20,8 +20,8 @@ public class GeminiAiService {
     private final RestClient http = RestClient.create();
     private final ObjectMapper json = new ObjectMapper();
 
-    public GeminiAiService(@Value("${GEMINI_API_KEY:}") String apiKey,
-                           @Value("${GEMINI_MODEL:gemini-2.5-flash}") String model) {
+    public GeminiAiService(@Value("${openstudy.ai.gemini.api-key:${GEMINI_API_KEY:}}") String apiKey,
+                           @Value("${openstudy.ai.gemini.model:${GEMINI_MODEL:gemini-3.8-flash}}") String model) {
         this.apiKey = apiKey;
         this.model = model;
     }

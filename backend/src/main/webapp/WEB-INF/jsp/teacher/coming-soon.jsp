@@ -13,7 +13,6 @@
 <div class="layout">
     <jsp:include page="fragments/sidebar.jsp"/>
     <div class="layout-main">
-        <jsp:include page="fragments/navbar.jsp"/>
         <main class="content">
             <section class="panel placeholder-panel">
                 <p class="eyebrow">Integration placeholder</p>

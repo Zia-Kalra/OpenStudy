@@ -32,7 +32,8 @@ class TeacherDashboardServiceTest {
         assertThat(dashboard.isEmptyActivity()).isFalse();
         assertThat(dashboard.getRecentActivity()).hasSize(4);
         assertThat(dashboard.getQuickActions()).hasSize(4);
-        assertThat(dashboard.getQuickActions()).allMatch(action -> action.getHref().contains("/teacher/coming-soon"));
+        assertThat(dashboard.getQuickActions().stream()
+                .anyMatch(action -> action.getHref().equals("/teacher/assignments"))).isTrue();
         assertThat(dashboard.getGreeting()).contains("Dr. Priya Sharma");
     }
 

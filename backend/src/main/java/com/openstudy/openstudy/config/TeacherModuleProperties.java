@@ -8,8 +8,8 @@ public class TeacherModuleProperties {
     private String dashboardPath = "/teacher/dashboard";
     private String questionBankPath = "/teacher/coming-soon?module=question-bank";
     private String quizzesPath = "/teacher/coming-soon?module=quizzes";
-    private String assignmentsPath = "/teacher/coming-soon?module=assignments";
-    private String submissionsPath = "/teacher/coming-soon?module=submissions";
+    private String assignmentsPath = "/teacher/assignments";
+    private String submissionsPath = "/teacher/submissions";
     private String analyticsPath = "/teacher/coming-soon?module=analytics";
     private String profilePath = "/teacher/coming-soon?module=profile";
     private String logoutPath = "/logout";

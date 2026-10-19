@@ -49,15 +49,9 @@ public class StudentDashboardController {
     }
 
     @GetMapping("/student/assignments")
-    public String assignments(Model model, HttpSession session) {
-        addCurrentUser(model, session);
-        model.addAttribute("activePage", "assignments");
-        model.addAttribute("assignments", List.of(
-                Map.of("title", "Database Normalization", "details", "5 Questions", "marks", "30 marks", "due", "Due: 25 Oct 2026", "status", "Pending"),
-                Map.of("title", "Java Collections", "details", "3 Questions", "marks", "30 marks", "due", "Due: 26 Oct 2026", "status", "Pending"),
-                Map.of("title", "R Statistical Analysis", "details", "4 Questions", "marks", "40 marks", "due", "Due: 20 Oct 2026", "status", "Pending"),
-                Map.of("title", "Operating Systems Concepts", "details", "4 Questions", "marks", "30 marks", "due", "Due: 05 Nov 2026", "status", "Pending")));
-        return "student/assignments";
+    public String assignments(Model model) {
+        model.addAttribute("assignmentUiRole", "STUDENT");
+        return "assignments";
     }
 
     @GetMapping("/student/results")
