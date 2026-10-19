@@ -4,6 +4,7 @@ import com.openstudy.openstudy.service.GeminiAiService;
 import com.openstudy.openstudy.model.User;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.dao.EmptyResultDataAccessException;
+import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +21,7 @@ import java.util.*;
 
 @RestController
 @RequestMapping("/api/assignments")
+@Profile("!mock")
 public class AssignmentController {
     private final JdbcTemplate db;
     private final GeminiAiService ai;
