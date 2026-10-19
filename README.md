@@ -101,6 +101,14 @@ This repository is being prepared for collaborative development. Features, datab
 
 See the repository's `LICENSE` file for licensing terms.
 
+## Assignment feature
+
+The assignment workspace is served at `/assignments/`. Apply the SQL migrations in order, including `database/migrations/V4__assignment_attempts_and_attachments.sql`, before using it. V4 adds attempt timing and attachment metadata to the existing V2/V3 assignment model.
+
+The feature expects the application's authenticated session to expose either a `User` object under `user`, or `userId` and `role` attributes. It enforces the teacher/student role and assignment ownership/enrollment in the assignment endpoints. The repository currently has no sign-in implementation, so a session must be established by the authentication feature.
+
+Set `GEMINI_API_KEY` in the server environment to enable AI question suggestions and answer evaluation. `GEMINI_MODEL` is optional and defaults to `gemini-2.5-flash`. The browser never receives the key. Student uploads are stored under `uploads/assignments` (configurable with the `openstudy.upload-dir` JVM system property); retain this directory with the application deployment and serve downloads through an authenticated endpoint before exposing attachments for retrieval.
+
 
 ## Test your endpoints
 Open these in your browser:
