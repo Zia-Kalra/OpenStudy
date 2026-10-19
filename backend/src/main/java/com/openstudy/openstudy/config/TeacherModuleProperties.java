@@ -12,7 +12,7 @@ public class TeacherModuleProperties {
     private String submissionsPath = "/teacher/coming-soon?module=submissions";
     private String analyticsPath = "/teacher/coming-soon?module=analytics";
     private String profilePath = "/teacher/coming-soon?module=profile";
-    private String logoutPath = "/teacher/coming-soon?module=logout";
+    private String logoutPath = "/logout";
 
     public String getDashboardPath() {
         return dashboardPath;

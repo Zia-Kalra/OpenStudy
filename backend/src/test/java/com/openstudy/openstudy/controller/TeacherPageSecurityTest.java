@@ -45,13 +45,31 @@ class TeacherPageSecurityTest {
     }
 
     private HttpResponse<String> get(String path) throws Exception {
-        return HttpClient.newHttpClient().send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + path)).GET().build(),
+        return HttpClient.newBuilder().followRedirects(HttpClient.Redirect.ALWAYS).build().send(
+                HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + path)).GET().build(),
                 HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> authenticatedGet(String path) throws Exception {
+        HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
+        HttpRequest loginRequest = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/login"))
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString("email=teacher@example.com&password=teacher123&role=teacher"))
+                .build();
+        HttpResponse<String> loginResponse = client.send(loginRequest, HttpResponse.BodyHandlers.ofString());
+        assertThat(loginResponse.statusCode()).isEqualTo(302);
+        String sessionCookie = loginResponse.headers().firstValue("Set-Cookie").orElseThrow().split(";", 2)[0];
+
+        HttpRequest pageRequest = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + path))
+                .header("Cookie", sessionCookie)
+                .GET()
+                .build();
+        return client.send(pageRequest, HttpResponse.BodyHandlers.ofString());
     }
 
     @Test
     void actualJspEscapesDashboardDataAndNavigationAttributes() throws Exception {
-        var response = get("/teacher/dashboard");
+        var response = authenticatedGet("/teacher/dashboard");
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).doesNotContain(ATTACK).contains("&lt;script&gt;")
                 .contains("&amp;marker=&#034;attribute-marker&#034;")
@@ -60,7 +78,7 @@ class TeacherPageSecurityTest {
 
     @Test
     void actualPlaceholderDoesNotReflectQueryPayload() throws Exception {
-        var response = get("/teacher/coming-soon?module=%3Cscript%3Ewindow.queryMarker%3D1%3C%2Fscript%3E");
+        var response = authenticatedGet("/teacher/coming-soon?module=%3Cscript%3Ewindow.queryMarker%3D1%3C%2Fscript%3E");
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).doesNotContain("window.queryMarker=1", ATTACK).contains("Module key: module");
     }
