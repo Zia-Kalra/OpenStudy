@@ -4,13 +4,15 @@ import com.openstudy.openstudy.dto.TeacherIdentityDTO;
 import com.openstudy.openstudy.dto.analytics.TeacherAnalyticsScope;
 import java.security.Principal;
 import java.util.Set;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 
 @Component
-@Profile("mock")
+@Profile("!prod & !production")
+@ConditionalOnProperty(name = "openstudy.teacher-analytics.demo-access", havingValue = "true")
 public class MockTeacherAnalyticsAccessProvider implements TeacherAnalyticsAccessProvider {
     @Override
     public TeacherAnalyticsScope resolve(Principal principal) {

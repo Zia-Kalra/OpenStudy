@@ -28,20 +28,45 @@ public class GeminiAIService implements AIService {
 
     private static final Logger log = LoggerFactory.getLogger(GeminiAIService.class);
 
+    private static final int DEFAULT_MAX_ATTEMPTS = 3;
+
     private final RestClient geminiRestClient;
     private final GeminiProperties properties;
     private final GeminiJsonParser parser;
     private final AiResponseValidator validator;
+    private final int maxAttempts;
+    private final Sleeper sleeper;
+
+    @FunctionalInterface
+    interface Sleeper {
+        void sleep(long millis) throws InterruptedException;
+    }
 
     public GeminiAIService(
             RestClient geminiRestClient,
             GeminiProperties properties,
             GeminiJsonParser parser,
             AiResponseValidator validator) {
+        this(geminiRestClient, properties, parser, validator, DEFAULT_MAX_ATTEMPTS, millis -> {
+            if (millis > 0) {
+                Thread.sleep(millis);
+            }
+        });
+    }
+
+    GeminiAIService(
+            RestClient geminiRestClient,
+            GeminiProperties properties,
+            GeminiJsonParser parser,
+            AiResponseValidator validator,
+            int maxAttempts,
+            Sleeper sleeper) {
         this.geminiRestClient = geminiRestClient;
         this.properties = properties;
         this.parser = parser;
         this.validator = validator;
+        this.maxAttempts = Math.max(1, maxAttempts);
+        this.sleeper = sleeper;
     }
 
     @Override
@@ -112,6 +137,14 @@ public class GeminiAIService implements AIService {
             throw new AiServiceException(AiErrorCode.NETWORK_FAILURE, "Could not reach the Gemini API.");
         } catch (Exception ex) {
             throw new AiServiceException(AiErrorCode.NETWORK_FAILURE, "Gemini request failed.");
+        }
+    }
+
+    /** Fixed, minimal probe. Discards generated text and never returns upstream data to a diagnostic caller. */
+    public void verifyConnection() {
+        JsonNode payload = parser.parsePayload(callGemini("Return JSON only with exactly this object: {\"status\":\"OK\"}."));
+        if (!payload.isObject() || payload.size() != 1 || !"OK".equals(parser.readText(payload, "status"))) {
+            throw new AiServiceException(AiErrorCode.UNEXPECTED_RESPONSE, "Gemini verification returned an unexpected response.");
         }
     }
 

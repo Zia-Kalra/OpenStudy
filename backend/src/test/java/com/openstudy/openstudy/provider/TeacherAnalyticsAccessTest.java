@@ -25,6 +25,37 @@ class TeacherAnalyticsAccessTest {
     }
 
     @Test
+    void demoAccessEnablesMockProviderOutsideProduction() {
+        new ApplicationContextRunner()
+                .withPropertyValues("openstudy.teacher-analytics.demo-access=true")
+                .withUserConfiguration(TeacherAnalyticsAccessConfiguration.class, MockTeacherAnalyticsAccessProvider.class)
+                .run(context -> assertThat(context.getBean(TeacherAnalyticsAccessProvider.class))
+                        .isInstanceOf(MockTeacherAnalyticsAccessProvider.class));
+    }
+
+    @Test
+    void missingDemoAccessKeepsFailClosedFallback() {
+        new ApplicationContextRunner()
+                .withUserConfiguration(TeacherAnalyticsAccessConfiguration.class, MockTeacherAnalyticsAccessProvider.class)
+                .run(context -> {
+                    assertThat(context.getBean(TeacherAnalyticsAccessProvider.class))
+                            .isInstanceOf(UnavailableTeacherAnalyticsAccessProvider.class);
+                    assertThatThrownBy(() -> context.getBean(TeacherAnalyticsAccessProvider.class).resolve(null))
+                            .isInstanceOf(ResponseStatusException.class)
+                            .extracting(ex -> ((ResponseStatusException) ex).getStatusCode().value()).isEqualTo(503);
+                });
+    }
+
+    @Test
+    void productionIgnoresDemoAccessFlag() {
+        new ApplicationContextRunner()
+                .withPropertyValues("spring.profiles.active=production", "openstudy.teacher-analytics.demo-access=true")
+                .withUserConfiguration(TeacherAnalyticsAccessConfiguration.class, MockTeacherAnalyticsAccessProvider.class)
+                .run(context -> assertThat(context.getBean(TeacherAnalyticsAccessProvider.class))
+                        .isInstanceOf(UnavailableTeacherAnalyticsAccessProvider.class));
+    }
+
+    @Test
     void futureAuthenticatedAdapterReplacesFallbackWithoutChangingControllers() {
         var scope = new MockTeacherAnalyticsAccessProvider().resolve(null);
         new ApplicationContextRunner().withPropertyValues("spring.profiles.active=production").withUserConfiguration(TeacherAnalyticsAccessConfiguration.class)

@@ -4,7 +4,8 @@ import com.openstudy.openstudy.service.TeacherDashboardService;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ModelAttribute;
 
-@ControllerAdvice(assignableTypes = {TeacherDashboardController.class, TeacherPlaceholderController.class, TeacherAnalyticsController.class})
+@ControllerAdvice(assignableTypes = {TeacherDashboardController.class, TeacherPlaceholderController.class,
+        TeacherAnalyticsController.class})
 public class TeacherLayoutAdvice {
 
     private final TeacherDashboardService teacherDashboardService;

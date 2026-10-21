@@ -45,12 +45,16 @@ live in `dto.analytics`; providers live in `provider.analytics`.
 boundary. It returns an immutable `TeacherAnalyticsScope` containing a verified
 teacher identity and server-derived class and subject assignments.
 
-- The `mock` profile allows anonymous access to the explicitly labeled demo teacher.
-  Any other principal is rejected. This is demonstration access, not production login.
-- Outside `mock`, the conditional fallback fails closed with HTTP 503 before data is
-  loaded. Member 1 can supply a `TeacherAnalyticsAccessProvider` bean without modifying
-  the controller. The adapter must verify login and TEACHER role and resolve assignments
-  from trusted server-side identity; a principal name alone is insufficient.
+- Local demonstration access is opt-in through `openstudy.teacher-analytics.demo-access=true`.
+  The default application properties enable it so Teacher Analytics works with Aiven on
+  the default profile and with the database-free `mock` profile. Anonymous access is
+  limited to the labeled demo teacher. Any other principal is rejected. This is not
+  production login. The mock access bean is disabled on `prod`/`production` profiles.
+- Without that flag, and whenever a real adapter is missing on production, the
+  conditional fallback fails closed with HTTP 503 before data is loaded. Member 1 can
+  supply a `TeacherAnalyticsAccessProvider` bean without modifying the controller. The
+  adapter must verify login and TEACHER role and resolve assignments from trusted
+  server-side identity; a principal name alone is insufficient.
 - Unauthorized class/subject filters return 403. Student/report IDs outside the
   selected authorized scope return 404. Aggregates, feedback, question results, and
   reports are constrained by the same scope. Cross-class/subject reports require

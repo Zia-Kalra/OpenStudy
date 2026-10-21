@@ -119,6 +119,35 @@ class GeminiAIServiceTest {
     }
 
     @Test
+    void fixedVerificationUsesOfficialApiAndDiscardsGeneratedContent() {
+        var mapper = new ObjectMapper();
+        String body = mapper.writeValueAsString(java.util.Map.of("candidates", java.util.List.of(
+                java.util.Map.of("finishReason", "STOP", "content", java.util.Map.of("parts", java.util.List.of(
+                        java.util.Map.of("text", "{\"status\":\"OK\"}")))))));
+        server.expect(requestTo("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent"))
+                .andExpect(method(HttpMethod.POST)).andExpect(header("x-goog-api-key", "test-key"))
+                .andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
+        service.verifyConnection();
+        server.verify();
+    }
+
+    @Test
+    void verificationRejectsUnexpectedAndExtraOutput() {
+        respondWithPayload(java.util.Map.of("status", "OK", "extra", "PRIVATE_RESPONSE_MARKER"));
+        assertThatThrownBy(service::verifyConnection).isInstanceOf(AiServiceException.class)
+                .hasMessage("Gemini verification returned an unexpected response.");
+        server.verify();
+    }
+
+    @Test
+    void exampleKeyIsTreatedAsMissingBeforeAnyHttpRequest() {
+        properties.setApiKey("YOUR_API_KEY_HERE");
+        assertThatThrownBy(service::verifyConnection).isInstanceOf(AiServiceException.class)
+                .extracting(ex -> ((AiServiceException) ex).getErrorCode()).isEqualTo(AiErrorCode.MISSING_API_KEY);
+        server.verify();
+    }
+
+    @Test
     void evaluatesAssignmentAndKeepsTeacherAuthority() {
         respondWithPayload(java.util.Map.of("suggestedScore", 12, "feedback", "Clear answer",
                 "strengths", java.util.List.of("Clarity"), "areasForImprovement", java.util.List.of()));

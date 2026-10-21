@@ -41,9 +41,13 @@ openstudy.dashboard.mock-scenario=empty
 
 Set the API key in the environment. Never commit it, never put it in JSP/JS, and never log it.
 
+For a working local `backend/.env` loader and isolated verification endpoint, follow
+[Gemini local setup](gemini-local.md). Store the real key only in the ignored
+`backend/.env`, then launch with `backend/run-gemini-local.ps1`. Creating the file
+without the launcher does not load it into Spring Boot.
+
 ```powershell
-$env:GEMINI_API_KEY = "your-real-key"
-$env:GEMINI_MODEL = "gemini-3.8-flash"
+powershell -NoProfile -ExecutionPolicy Bypass -File .\backend\run-gemini-local.ps1 -Port 8081
 ```
 
 Enable the live provider:
@@ -57,7 +61,7 @@ openstudy.ai.gemini.model=${GEMINI_MODEL:gemini-3.8-flash}
 The implementation calls:
 
 The default `gemini-3.8-flash` was verified against Google's official model catalog
-on 11 October 2026: https://ai.google.dev/gemini-api/docs/models . Override it with
+on 13 October 2026: https://ai.google.dev/gemini-api/docs/models . Override it with
 `GEMINI_MODEL` when the team selects another supported model.
 
 `POST {baseUrl}/models/{model}:generateContent`
@@ -148,6 +152,11 @@ Do not change `TeacherDashboardController` for that swap.
 | `GET /teacher/coming-soon?module=` | Member 5 | Integration placeholder only |
 | `GET /api/test` | existing | Backend smoke test |
 | `GET /api/db-test` | existing | JDBC smoke test (not on `mock`) |
+
+Failed teacher pages and `/api/*` errors render through the shared error handler.
+HTML uses `teacher/error.jsp` with a reference id and no stack traces. JSON uses
+`{success,status,code,message,referenceId,retryable}`. Database outages map to 503;
+Gemini `AiServiceException` maps to 4xx/5xx without dummy AI content.
 
 Do not add competing quiz, assignment, analytics, or login controllers on top of these.
 

@@ -5,10 +5,7 @@ import com.openstudy.openstudy.provider.analytics.UnavailableTeacherAnalyticsAcc
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Profile;
-
 @Configuration(proxyBeanMethods = false)
-@Profile("!mock")
 public class TeacherAnalyticsAccessConfiguration {
     @Bean
     @ConditionalOnMissingBean(TeacherAnalyticsAccessProvider.class)

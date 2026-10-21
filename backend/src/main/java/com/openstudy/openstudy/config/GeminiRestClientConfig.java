@@ -11,9 +11,10 @@ public class GeminiRestClientConfig {
 
     @Bean
     RestClient geminiRestClient(GeminiProperties properties) {
+        properties.validateTransport();
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(Duration.ofSeconds(10));
-        factory.setReadTimeout(Duration.ofMillis(Math.max(properties.getTimeoutMs(), 1000)));
+        factory.setReadTimeout(Duration.ofMillis(properties.getTimeoutMs()));
         return RestClient.builder()
                 .baseUrl(properties.getBaseUrl())
                 .requestFactory(factory)
