@@ -25,6 +25,10 @@ public class TeacherPlaceholderController {
 
     @GetMapping("/teacher/coming-soon")
     public String comingSoon(@RequestParam(defaultValue = "module") String module, Model model) {
+        if ("logout".equalsIgnoreCase(module)) {
+            return "redirect:/logout";
+        }
+
         String moduleKey = MODULES.containsKey(module) ? module : "module";
         ModuleMeta meta = MODULES.getOrDefault(
                 moduleKey,
