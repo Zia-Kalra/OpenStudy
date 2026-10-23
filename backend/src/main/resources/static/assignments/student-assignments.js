@@ -3,10 +3,14 @@
   const rows = document.getElementById("pendingAssignmentRows");
   const notice = document.getElementById("studentAssignmentNotice");
   const attemptPanel = document.getElementById("studentAttemptPanel");
+  const submittedAttemptPanel = document.getElementById("studentSubmittedAttemptPanel");
   const attemptDialog = document.getElementById("attemptConfirmDialog");
   const submitDialog = document.getElementById("submitConfirmDialog");
   let activeAttempt = null;
   let selectedAssignment = null;
+  let assignmentView = "pending";
+  const assignmentCache = { pending: null, attempted: null };
+  const assignmentSearch = document.getElementById("studentAssignmentSearch");
   let timerHandle = null;
   const answerSaveTimers = new Map();
   const answerSaveChains = new Map();
@@ -51,16 +55,31 @@
 
   async function loadAssignments() {
     rows.replaceChildren();
+    const attemptedView = assignmentView === "attempted";
     document.getElementById("pendingAssignmentCount").textContent = "Loading…";
+    document.getElementById("studentAssignmentsTitle").textContent = attemptedView ? "Attempted Assignments" : "Pending Assignments";
+    document.getElementById("studentAssignmentsDescription").textContent = attemptedView
+      ? "Review the questions and answers you submitted."
+      : "Published assignments that still need your submission.";
+    document.getElementById("assignmentDateHeading").textContent = attemptedView ? "Submitted on" : "Creation date";
     try {
-      const assignments = await api("/api/assignments");
-      document.getElementById("pendingAssignmentCount").textContent = `${assignments.length} assignments`;
+      let assignments = assignmentCache[assignmentView];
+      if (!assignments) {
+        assignments = await api(attemptedView ? "/api/assignments/student/submissions" : "/api/assignments");
+        assignmentCache[assignmentView] = assignments;
+      }
+      const query = assignmentSearch.value.trim().toLocaleLowerCase();
+      assignments = assignments.filter((assignment) =>
+        `${assignment.title || ""} ${assignment.subject_name || ""}`.toLocaleLowerCase().includes(query));
+      document.getElementById("pendingAssignmentCount").textContent = `${assignments.length} ${assignments.length === 1 ? "assignment" : "assignments"}`;
       if (!assignments.length) {
         const row = document.createElement("tr");
         const cell = document.createElement("td");
         cell.colSpan = 7;
         cell.className = "student-assignment-empty";
-        cell.textContent = "There are no pending assignments right now.";
+        cell.textContent = query
+          ? "No assignments match that assignment or subject name."
+          : (attemptedView ? "You have not submitted any assignments yet." : "There are no pending assignments right now.");
         row.append(cell);
         rows.append(row);
         return;
@@ -70,11 +89,22 @@
         addCell(row, "No.", String(index + 1));
         addCell(row, "Assignment topic", assignment.title || "Untitled assignment", "student-assignment-topic");
         addCell(row, "Subject", assignment.subject_name || "—");
-        addCell(row, "Creation date", formatDate(assignment.created_at));
+        addCell(row, attemptedView ? "Submitted on" : "Creation date", formatDate(attemptedView ? assignment.submitted_at : assignment.created_at));
         addCell(row, "Due date", formatDate(assignment.due_at));
         addCell(row, "Marks", `${assignment.max_score} marks`);
+        const actionCell = addCell(row, "Activity", "");
+        if (attemptedView) {
+          const viewButton = document.createElement("button");
+          viewButton.type = "button";
+          viewButton.className = "student-attempt-button";
+          viewButton.textContent = "View attempt";
+          viewButton.addEventListener("click", () => viewSubmittedAttempt(assignment.submission_id));
+          actionCell.append(viewButton);
+          rows.append(row);
+          return;
+        }
         const expired = dateValue(assignment.due_at)?.getTime() <= Date.now();
-        const actionCell = addCell(row, "Activity", "", expired ? "student-assignment-expired-cell" : "");
+        if (expired) actionCell.classList.add("student-assignment-expired-cell");
         if (expired) {
           const badge = document.createElement("span");
           badge.className = "student-assignment-expired";
@@ -104,6 +134,71 @@
     }
   }
 
+  async function viewSubmittedAttempt(submissionId) {
+    document.getElementById("studentAssignmentsHeader").hidden = true;
+    document.getElementById("studentAssignmentListPanel").hidden = true;
+    submittedAttemptPanel.hidden = false;
+    const title = document.getElementById("submittedAttemptTitle");
+    const meta = document.getElementById("submittedAttemptMeta");
+    const container = document.getElementById("studentSubmittedQuestions");
+    title.textContent = "Submitted attempt";
+    meta.textContent = "Loading your submitted answers…";
+    container.replaceChildren();
+    try {
+      const attempt = await api(`/api/assignments/student/submissions/${submissionId}`);
+      title.textContent = attempt.title || "Submitted attempt";
+      meta.textContent = `${attempt.subject_name || ""} · Submitted ${formatDate(attempt.submitted_at)}${attempt.attachments_available === false ? " · File attachments are unavailable until the V5 migration is applied." : ""}`;
+      (attempt.questions || []).forEach((question, index) => {
+        const section = document.createElement("section");
+        section.className = "student-attempt-question";
+        const heading = document.createElement("div");
+        heading.className = "student-question-heading";
+        const questionTitle = document.createElement("h3");
+        questionTitle.textContent = `Question ${index + 1}`;
+        const points = document.createElement("span");
+        points.className = "student-question-marks";
+        points.textContent = `${question.points} marks possible`;
+        heading.append(questionTitle, points);
+        const prompt = document.createElement("p");
+        prompt.textContent = question.question_text || "";
+        const answerLabel = document.createElement("h4");
+        answerLabel.textContent = "Your submitted answer";
+        const answer = document.createElement("p");
+        answer.className = `student-submitted-answer${String(question.answer_text || "").trim() ? "" : " empty"}`;
+        answer.textContent = String(question.answer_text || "").trim() || "No written answer submitted.";
+        section.append(heading, prompt, answerLabel, answer);
+        if ((question.attachments || []).length) {
+          const files = document.createElement("div");
+          files.className = "student-submitted-files";
+          question.attachments.forEach((file) => {
+            const link = document.createElement("a");
+            link.href = `${base}/api/assignments/student/answer-attachments/${encodeURIComponent(file.attachment_id)}`;
+            link.target = "_blank";
+            link.rel = "noopener";
+            link.textContent = `View attachment: ${file.original_name}`;
+            files.append(link);
+          });
+          section.append(files);
+        }
+        container.append(section);
+      });
+      if (!(attempt.questions || []).length) container.textContent = "No questions were found for this attempt.";
+      submittedAttemptPanel.scrollIntoView({behavior:"smooth", block:"start"});
+    } catch (error) {
+      meta.textContent = error.message;
+    }
+  }
+
+  async function selectAssignmentView(view) {
+    assignmentView = view;
+    const pending = view === "pending";
+    document.getElementById("pendingAssignmentsTab").classList.toggle("active", pending);
+    document.getElementById("pendingAssignmentsTab").setAttribute("aria-selected", String(pending));
+    document.getElementById("attemptedAssignmentsTab").classList.toggle("active", !pending);
+    document.getElementById("attemptedAssignmentsTab").setAttribute("aria-selected", String(!pending));
+    await loadAssignments();
+  }
+
   function showAttemptSummary(assignment) {
     selectedAssignment = assignment;
     document.getElementById("attemptConfirmTitle").textContent = assignment.title || "Assignment";
@@ -128,6 +223,7 @@
       document.getElementById("studentAssignmentsHeader").hidden = true;
       document.getElementById("studentAssignmentListPanel").hidden = true;
       notice.classList.remove("visible");
+      document.body.classList.add("student-attempt-active");
       renderAttempt();
       attemptPanel.scrollIntoView({behavior:"smooth", block:"start"});
     } catch (error) {
@@ -273,15 +369,13 @@
     const unanswered = questions.filter((field) => !attempted.includes(field));
     const attachmentCount = [...document.querySelectorAll(".student-answer-attachments")].reduce((sum, list) => sum + list.children.length, 0);
     const marks = Number(activeAttempt?.max_score || 0);
-    const attemptedNumbers = attempted.map((field) => `Q${questions.indexOf(field) + 1}`).join(", ") || "None";
     const unansweredNumbers = unanswered.map((field) => `Q${questions.indexOf(field) + 1}`).join(", ") || "None";
     document.getElementById("attemptedCount").textContent = String(attempted.length);
     document.getElementById("unattemptedCount").textContent = String(unanswered.length);
-    document.getElementById("attemptedQuestionNumbers").textContent = attemptedNumbers;
     document.getElementById("unattemptedQuestionNumbers").textContent = unansweredNumbers;
     document.getElementById("submitTotalMarks").textContent = `${marks} marks`;
     document.getElementById("submitAttachmentCount").textContent = `${attachmentCount} ${attachmentCount === 1 ? "file" : "files"}`;
-    return {attempted:attempted.length, unattempted:unanswered.length, attemptedNumbers, unansweredNumbers, marks, attachmentCount};
+    return {attempted:attempted.length, unattempted:unanswered.length, unansweredNumbers, marks, attachmentCount};
   }
 
   document.getElementById("submitStudentAttempt").addEventListener("click", async () => {
@@ -306,7 +400,6 @@
       ? "Your saved answers were submitted automatically when the timer ended."
       : "Your answers have been submitted. You can no longer edit this attempt.";
     document.getElementById("resultAttemptedCount").textContent = String(summary.attempted);
-    document.getElementById("resultAttemptedNumbers").textContent = summary.attemptedNumbers;
     document.getElementById("resultUnattemptedCount").textContent = String(summary.unattempted);
     document.getElementById("resultUnattemptedNumbers").textContent = summary.unansweredNumbers;
     document.getElementById("resultTotalMarks").textContent = `${summary.marks} marks`;
@@ -327,15 +420,18 @@
       await api(`/api/assignments/submissions/${activeAttempt.submission_id}/submit`, {
         method:"POST", body:JSON.stringify({answers, automatic})
       });
+      assignmentCache.pending = null;
+      assignmentCache.attempted = null;
       clearInterval(timerHandle);
       activeAttempt = null;
       autoSubmitting = false;
+      document.body.classList.remove("student-attempt-active");
       if (submitDialog.open) submitDialog.close();
       attemptPanel.hidden = true;
       document.getElementById("studentAssignmentsHeader").hidden = false;
       document.getElementById("studentAssignmentListPanel").hidden = false;
       showSubmissionResult(summary, automatic);
-      await loadAssignments();
+      await selectAssignmentView("attempted");
     } catch (error) {
       setNotice(error.message);
       autoSubmitting = false;
@@ -346,6 +442,15 @@
   }
 
   document.getElementById("beginStudentAttempt").addEventListener("click", startAttempt);
+  document.getElementById("pendingAssignmentsTab").addEventListener("click", () => selectAssignmentView("pending"));
+  document.getElementById("attemptedAssignmentsTab").addEventListener("click", () => selectAssignmentView("attempted"));
+  assignmentSearch.addEventListener("input", () => loadAssignments());
+  document.getElementById("backToAttemptedList").addEventListener("click", async () => {
+    submittedAttemptPanel.hidden = true;
+    document.getElementById("studentAssignmentsHeader").hidden = false;
+    document.getElementById("studentAssignmentListPanel").hidden = false;
+    await selectAssignmentView("attempted");
+  });
   document.getElementById("cancelSubmitAttempt").addEventListener("click", () => submitDialog.close());
   document.getElementById("confirmSubmitAttempt").addEventListener("click", () => submitAttempt(false));
   document.getElementById("closeSubmissionResult").addEventListener("click", () => document.getElementById("submissionResultDialog").close());

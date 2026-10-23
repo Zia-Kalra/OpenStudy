@@ -3,14 +3,14 @@
   const api = `${base}/api/assignments`;
   const $ = (id) => document.getElementById(id);
   const rows = $("submissionRows"), notice = $("evaluationNotice");
-  let assignments = [], submissions = [], filter = "all";
+  let subjects = [], submissions = [], filter = "all";
   const escape = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   async function request(url, options = {}) {
     const response = await fetch(url, {credentials:"same-origin", headers:{"Content-Type":"application/json", ...(options.headers || {})}, ...options});
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
       let reason = data.detail || data.message || data.error || `Request failed (${response.status})`;
-      if (/BadSqlGrammar|bad SQL grammar|Unknown column|SQLSyntaxError/i.test(reason)) reason = "The database is missing the V4 assignment columns. Apply the assignment migration, then restart the backend.";
+      if (/BadSqlGrammar|bad SQL grammar|Unknown column|SQLSyntaxError|doesn't exist|does not exist/i.test(reason)) reason = "The database is missing a required assignment table or column. Apply the assignment migrations through V5, then retry.";
       throw new Error(reason);
     }
     return data;
@@ -25,8 +25,8 @@
     return ({pending:"Pending", "ai-evaluated":"AI Evaluated", "manually-evaluated":"Manually Evaluated"})[stateOf(item)];
   }
   function filtered() {
-    const assignment = $("assignmentFilter").value;
-    return submissions.filter((s) => (assignment === "all" || String(s.assignment_id) === assignment) &&
+    const subject = $("assignmentFilter").value;
+    return submissions.filter((s) => (subject === "all" || String(s.subject_id) === subject) &&
       (filter === "all" || stateOf(s) === filter));
   }
   function render() {
@@ -60,10 +60,10 @@
   }
   async function reload() {
     try {
-      [assignments, submissions] = await Promise.all([request(`${api}/teacher`), request(`${api}/teacher/submissions`)]);
+      [subjects, submissions] = await Promise.all([request(`${api}/subjects`), request(`${api}/teacher/submissions`)]);
       const select = $("assignmentFilter"), selected = select.value;
-      select.replaceChildren(new Option("All assignments", "all"));
-      assignments.forEach((a) => select.add(new Option(a.title, a.assignment_id)));
+      select.replaceChildren(new Option("All subjects", "all"));
+      subjects.forEach((subject) => select.add(new Option(subject.subject_name, subject.subject_id)));
       if ([...select.options].some((o) => o.value === selected)) select.value = selected;
       render();
     } catch (error) { rows.innerHTML = `<tr><td colspan="5">${escape(error.message)}</td></tr>`; say(error.message, true); }

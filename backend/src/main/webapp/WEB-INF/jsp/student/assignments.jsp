@@ -26,20 +26,28 @@
     <main class="student-main student-assignment-main">
         <header class="student-topbar">
             <button class="icon-button sidebar-toggle" id="studentSidebarToggle" aria-label="Toggle navigation" data-action="toggle-sidebar">☰</button>
-            <div class="searchbox"><span>⌕</span><input type="text" placeholder="Search assignments..." aria-label="Search assignments"></div>
+            <div class="searchbox"><span>⌕</span><input id="studentAssignmentSearch" type="search" placeholder="Search by assignment or subject..." aria-label="Search assignments by assignment or subject"></div>
             <div class="topbar-actions"><div class="user-chip"><div class="avatar-circle"><c:out value="${currentUserInitial}"/></div><div class="user-name"><c:out value="${currentUserName}"/></div></div></div>
         </header>
         <div class="content-shell">
-            <section class="page-header" id="studentAssignmentsHeader"><h1>Pending Assignments</h1><p>Published assignments that still need your submission.</p></section>
+            <section class="page-header" id="studentAssignmentsHeader"><h1 id="studentAssignmentsTitle">Pending Assignments</h1><p id="studentAssignmentsDescription">Published assignments that still need your submission.</p></section>
             <div id="studentAssignmentNotice" class="student-assignment-notice" role="status" aria-live="polite"></div>
             <section class="panel student-assignment-panel" id="studentAssignmentListPanel">
-                <div class="panel-header"><div><h3>My assignments</h3><p>Complete each attempt before its due date.</p></div><span id="pendingAssignmentCount" class="assignment-count">Loading…</span></div>
+                <div class="panel-header"><div><h3>My assignments</h3></div><span id="pendingAssignmentCount" class="assignment-count">Loading…</span></div>
+                <div class="student-assignment-tabs" role="tablist" aria-label="Assignment activity">
+                    <button type="button" id="pendingAssignmentsTab" class="active" role="tab" aria-selected="true">Pending</button>
+                    <button type="button" id="attemptedAssignmentsTab" role="tab" aria-selected="false">Attempted</button>
+                </div>
                 <div class="student-assignment-table-wrap">
                     <table class="student-assignment-table">
-                        <thead><tr><th>No.</th><th>Assignment topic</th><th>Subject</th><th>Creation date</th><th>Due date</th><th>Marks</th><th>Activity</th></tr></thead>
+                        <thead><tr><th>No.</th><th>Assignment topic</th><th>Subject</th><th id="assignmentDateHeading">Creation date</th><th>Due date</th><th>Marks</th><th>Activity</th></tr></thead>
                         <tbody id="pendingAssignmentRows"><tr><td colspan="7" class="student-assignment-empty">Loading published assignments…</td></tr></tbody>
                     </table>
                 </div>
+            </section>
+            <section id="studentSubmittedAttemptPanel" class="panel student-attempt-panel" hidden>
+                <div class="student-attempt-heading"><div><h2 id="submittedAttemptTitle">Submitted attempt</h2><p id="submittedAttemptMeta"></p></div><button id="backToAttemptedList" class="secondary-button" type="button">Back to attempted assignments</button></div>
+                <div id="studentSubmittedQuestions" class="student-attempt-questions"></div>
             </section>
             <section id="studentAttemptPanel" class="panel student-attempt-panel" hidden>
                 <div class="student-attempt-heading"><div><h2 id="studentAttemptTitle">Assignment attempt</h2><p id="studentAttemptDue"></p></div><div class="student-attempt-timer"><span>Time remaining</span><strong id="studentAttemptTimer">--:--:--</strong></div></div>
@@ -62,7 +70,7 @@
     <div class="student-confirm-dialog-card">
         <p class="dialog-eyebrow">SUBMISSION REVIEW</p>
         <h2>Review your answers</h2>
-        <div class="student-submit-summary"><section><h3>Questions attempted <span id="attemptedCount">0</span></h3><p id="attemptedQuestionNumbers">None</p></section><section><h3>Unattempted <span id="unattemptedCount">0</span></h3><p id="unattemptedQuestionNumbers">None</p></section><section><h3>Total marks</h3><p id="submitTotalMarks">0</p></section><section><h3>Attachments</h3><p id="submitAttachmentCount">0 files</p></section></div>
+        <div class="student-submit-summary"><section><h3>Questions attempted</h3><strong id="attemptedCount">0</strong></section><section><h3>Unattempted</h3><strong id="unattemptedCount">0</strong><p id="unattemptedQuestionNumbers">None</p></section><section><h3>Total marks</h3><p id="submitTotalMarks">0</p></section><section><h3>Attachments</h3><p id="submitAttachmentCount">0 files</p></section></div>
         <p class="student-submit-confirm-copy">Are you sure you want to submit this assignment? You cannot edit your answers after submission.</p>
         <div class="student-dialog-actions"><button type="button" id="cancelSubmitAttempt" class="secondary-button">Go back</button><button type="button" id="confirmSubmitAttempt" class="primary-button">Yes, submit</button></div>
     </div>
@@ -72,7 +80,7 @@
         <p class="dialog-eyebrow">ASSIGNMENT SUBMITTED</p>
         <h2 id="submissionResultTitle">Time is up</h2>
         <p id="submissionResultMessage">Your saved answers have been submitted automatically.</p>
-        <div class="student-submit-summary"><section><h3>Questions attempted <span id="resultAttemptedCount">0</span></h3><p id="resultAttemptedNumbers">None</p></section><section><h3>Unattempted <span id="resultUnattemptedCount">0</span></h3><p id="resultUnattemptedNumbers">None</p></section><section><h3>Total marks</h3><p id="resultTotalMarks">0</p></section><section><h3>Attachments</h3><p id="resultAttachmentCount">0 files</p></section></div>
+        <div class="student-submit-summary"><section><h3>Questions attempted</h3><strong id="resultAttemptedCount">0</strong></section><section><h3>Unattempted</h3><strong id="resultUnattemptedCount">0</strong><p id="resultUnattemptedNumbers">None</p></section><section><h3>Total marks</h3><p id="resultTotalMarks">0</p></section><section><h3>Attachments</h3><p id="resultAttachmentCount">0 files</p></section></div>
         <div class="student-dialog-actions"><button type="button" id="closeSubmissionResult" class="primary-button">Close</button></div>
     </div>
 </dialog>

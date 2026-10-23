@@ -14,7 +14,7 @@
     <div id="evaluationNotice" class="assignment-notice" role="status" aria-live="polite"></div>
     <section class="panel evaluation-panel" id="evaluation">
         <div class="evaluation-toolbar"><div><h3 id="evaluationTitle">All Submissions</h3><p>Review student work manually or use AI suggestions, then confirm the marks.</p></div>
-        <label class="assignment-filter-label">Assignment<select id="assignmentFilter"><option value="all">All assignments</option></select></label>
+        <label class="assignment-filter-label">Subject<select id="assignmentFilter"><option value="all">All subjects</option></select></label>
       </div>
       <div class="evaluation-tabs" role="tablist" aria-label="Filter submissions">
         <button type="button" class="active" data-filter="all" role="tab" aria-selected="true">All Submissions</button>

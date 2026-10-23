@@ -58,7 +58,7 @@ openstudy.ai.groq.vision-model=${GROQ_VISION_MODEL:qwen/qwen3.8-27b}
 
 The implementation calls:
 
-The default is `openai/gpt-oss-20b`. PNG/JPEG images and PDF page renders are transcribed with `qwen/qwen3.8-27b`; embedded PDF text is extracted before grading. Groq vision accepts up to three images per request, so pages and images are sent in batches. See the official [vision documentation](https://console.groq.com/docs/vision). Override it with `GROQ_MODEL` when the team selects another supported Groq model.
+The default text-only evaluation model is `openai/gpt-oss-20b`. Answers with attachments use `qwen/qwen3.8-27b` for grading; images and scanned PDF pages are also transcribed with that vision model. Text-based PDF pages are extracted directly and are not also rendered for OCR. Oversized images are reduced to 1280 pixels on their longest edge, and scanned pages/images are sent one per vision request to keep each request smaller. Temporary Groq 429 responses are retried when the response supplies a retry delay (up to 30 seconds per retry). See the official [vision documentation](https://console.groq.com/docs/vision). Override the models with `GROQ_MODEL` and `GROQ_VISION_MODEL` when needed.
 
 `POST https://api.groq.com/openai/v1/chat/completions` with an `Authorization: Bearer` header.
 

@@ -87,8 +87,8 @@ public class AssignmentController {
 
     @GetMapping("/subjects")
     public List<Map<String,Object>> subjects(HttpSession session) {
-        Identity me = identity(session, "TEACHER");
-        return db.queryForList("SELECT s.subject_id,s.subject_name FROM subjects s JOIN subject_teachers st ON st.subject_id=s.subject_id WHERE st.teacher_id=? ORDER BY s.subject_name", me.id());
+        identity(session, "TEACHER");
+        return db.queryForList("SELECT subject_id,subject_name FROM subjects ORDER BY subject_name");
     }
 
     @PostMapping("/subjects") @Transactional
@@ -98,9 +98,8 @@ public class AssignmentController {
         List<Map<String,Object>> existing = db.queryForList("SELECT subject_id,subject_name FROM subjects WHERE LOWER(TRIM(subject_name))=LOWER(TRIM(?))", name);
         if (!existing.isEmpty()) {
             long existingId = ((Number) existing.get(0).get("subject_id")).longValue();
-            if (!db.queryForList("SELECT subject_id FROM subject_teachers WHERE subject_id=? AND teacher_id=?", Integer.class, existingId, me.id()).isEmpty())
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "That subject is already in your available options.");
-            db.update("INSERT INTO subject_teachers(subject_id,teacher_id) VALUES(?,?)", existingId, me.id());
+            if (db.queryForList("SELECT subject_id FROM subject_teachers WHERE subject_id=? AND teacher_id=?", Integer.class, existingId, me.id()).isEmpty())
+                db.update("INSERT INTO subject_teachers(subject_id,teacher_id) VALUES(?,?)", existingId, me.id());
             return Map.of("subject_id", existingId, "subject_name", existing.get(0).get("subject_name"));
         }
         long subjectId;
@@ -127,7 +126,7 @@ public class AssignmentController {
         try { due=LocalDateTime.parse(text(in,"dueAt",30,true)); }
         catch (Exception e) { throw bad("Enter a valid submission deadline."); }
         if(!due.isAfter(nowIst())) throw bad("Submission deadline must be in the future.");
-        if (!db.queryForList("SELECT subject_id FROM subject_teachers WHERE subject_id=? AND teacher_id=?", Integer.class, subject, me.id()).contains(subject)) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        one("SELECT subject_id FROM subjects WHERE subject_id=?", subject);
         long id = insertAndGetId("INSERT INTO assignments(subject_id,created_by,title,instructions,due_at,max_score,status,attempt_duration_minutes) VALUES(?,?,?,?,?,?,'DRAFT',?)",
                 subject, me.id(), title, instructions, due, max, hours*60+minutes);
         return Map.of("assignmentId",id,"status","DRAFT");
@@ -147,8 +146,7 @@ public class AssignmentController {
         try { due=LocalDateTime.parse(text(in,"dueAt",30,true)); }
         catch(Exception e) { throw bad("Enter a valid submission deadline."); }
         if(!due.isAfter(nowIst())) throw bad("Submission deadline must be in the future.");
-        if(db.queryForList("SELECT subject_id FROM subject_teachers WHERE subject_id=? AND teacher_id=?",Integer.class,subject,me.id()).isEmpty())
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Choose one of your available subjects.");
+        one("SELECT subject_id FROM subjects WHERE subject_id=?", subject);
         db.update("UPDATE assignments SET subject_id=?,title=?,instructions=?,due_at=?,max_score=?,attempt_duration_minutes=? WHERE assignment_id=? AND created_by=? AND status='DRAFT'",
                 subject,title,instructions,due,max,hours*60+minutes,id,me.id());
         return Map.of("assignmentId",id,"status","DRAFT","saved",true);
@@ -284,6 +282,44 @@ public class AssignmentController {
         return db.queryForList("SELECT a.assignment_id,a.title,a.instructions,a.created_at,a.due_at,a.max_score,a.attempt_duration_minutes,a.status,s.subject_name,(SELECT COUNT(*) FROM assignment_questions q WHERE q.assignment_id=a.assignment_id) question_count FROM assignments a JOIN subjects s ON s.subject_id=a.subject_id WHERE a.status='PUBLISHED' AND NOT EXISTS (SELECT 1 FROM assignment_submissions submitted WHERE submitted.assignment_id=a.assignment_id AND submitted.student_user_id=? AND submitted.status<>'DRAFT') ORDER BY a.due_at,a.created_at",me.id());
     }
 
+    @GetMapping("/student/submissions")
+    public List<Map<String,Object>> studentSubmittedAssignments(HttpSession session) {
+        Identity me=identity(session,"STUDENT");
+        return db.queryForList("SELECT s.submission_id,a.assignment_id,a.title,a.created_at,a.due_at,a.max_score,su.subject_name,s.submitted_at,s.status "
+                + "FROM assignment_submissions s JOIN assignments a ON a.assignment_id=s.assignment_id "
+                + "JOIN subjects su ON su.subject_id=a.subject_id WHERE s.student_user_id=? AND s.status IN ('SUBMITTED','GRADED') "
+                + "ORDER BY s.submitted_at DESC",me.id());
+    }
+
+    @GetMapping("/student/submissions/{submissionId}")
+    public Map<String,Object> studentSubmittedAttempt(@PathVariable long submissionId,HttpSession session) {
+        Identity me=identity(session,"STUDENT");
+        Map<String,Object> result=one("SELECT s.submission_id,s.submitted_at,s.status,a.title,a.instructions,a.created_at,a.due_at,a.max_score,su.subject_name "
+                + "FROM assignment_submissions s JOIN assignments a ON a.assignment_id=s.assignment_id "
+                + "JOIN subjects su ON su.subject_id=a.subject_id WHERE s.submission_id=? AND s.student_user_id=? AND s.status IN ('SUBMITTED','GRADED')",submissionId,me.id());
+        List<Map<String,Object>> questions=db.queryForList("SELECT q.question_id,q.question_text,q.points,COALESCE(aa.answer_text,'') answer_text "
+                + "FROM assignment_questions q JOIN assignment_submissions s ON s.assignment_id=q.assignment_id "
+                + "LEFT JOIN assignment_answers aa ON aa.question_id=q.question_id AND aa.submission_id=s.submission_id "
+                + "WHERE s.submission_id=? ORDER BY q.position",submissionId);
+        boolean attachmentsAvailable=true;
+        for(Map<String,Object> question:questions) {
+            if(!attachmentsAvailable) {
+                question.put("attachments",List.of());
+                continue;
+            }
+            try {
+                question.put("attachments",db.queryForList("SELECT ata.attachment_id,ata.original_name,ata.content_type,ata.size_bytes FROM assignment_answer_attachments ata "
+                        + "JOIN assignment_answers aa ON aa.answer_id=ata.answer_id WHERE aa.submission_id=? AND aa.question_id=? ORDER BY ata.uploaded_at",submissionId,question.get("question_id")));
+            } catch(BadSqlGrammarException missingAttachmentMigration) {
+                attachmentsAvailable=false;
+                question.put("attachments",List.of());
+            }
+        }
+        result.put("questions",questions);
+        result.put("attachments_available",attachmentsAvailable);
+        return result;
+    }
+
     @GetMapping("/{id}")
     public Map<String,Object> detail(@PathVariable long id,HttpSession session) {
         Identity me=identity(session,"STUDENT");
@@ -357,9 +393,19 @@ public class AssignmentController {
 
     @GetMapping("/answer-attachments/{attachmentId}")
     public ResponseEntity<Resource> downloadAnswerAttachment(@PathVariable long attachmentId,HttpSession session) {
-        Identity me=identity(session,"TEACHER");
-        Map<String,Object> file=one("SELECT ata.original_name,ata.content_type,ata.size_bytes,ata.file_data,a.created_by FROM assignment_answer_attachments ata JOIN assignment_answers aa ON aa.answer_id=ata.answer_id JOIN assignment_submissions s ON s.submission_id=aa.submission_id JOIN assignments a ON a.assignment_id=s.assignment_id WHERE ata.attachment_id=?",attachmentId);
-        if(((Number)file.get("created_by")).longValue()!=me.id()) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        identity(session,"TEACHER");
+        Map<String,Object> file=one("SELECT original_name,content_type,size_bytes,file_data FROM assignment_answer_attachments WHERE attachment_id=?",attachmentId);
+        return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION,ContentDisposition.inline().filename(file.get("original_name").toString(),StandardCharsets.UTF_8).build().toString())
+                .contentType(MediaType.parseMediaType(file.get("content_type").toString())).contentLength(((Number)file.get("size_bytes")).longValue())
+                .body(new ByteArrayResource((byte[])file.get("file_data")));
+    }
+
+    @GetMapping("/student/answer-attachments/{attachmentId}")
+    public ResponseEntity<Resource> downloadOwnAnswerAttachment(@PathVariable long attachmentId,HttpSession session) {
+        Identity me=identity(session,"STUDENT");
+        Map<String,Object> file=one("SELECT ata.original_name,ata.content_type,ata.size_bytes,ata.file_data FROM assignment_answer_attachments ata "
+                + "JOIN assignment_answers aa ON aa.answer_id=ata.answer_id JOIN assignment_submissions s ON s.submission_id=aa.submission_id "
+                + "WHERE ata.attachment_id=? AND s.student_user_id=?",attachmentId,me.id());
         return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION,ContentDisposition.inline().filename(file.get("original_name").toString(),StandardCharsets.UTF_8).build().toString())
                 .contentType(MediaType.parseMediaType(file.get("content_type").toString())).contentLength(((Number)file.get("size_bytes")).longValue())
                 .body(new ByteArrayResource((byte[])file.get("file_data")));
@@ -388,15 +434,10 @@ public class AssignmentController {
 
     @GetMapping("/attachments/{attachmentId}")
     public ResponseEntity<Resource> downloadAttachment(@PathVariable long attachmentId, HttpSession session) throws IOException {
-        Identity me = identity(session, "TEACHER");
-        Map<String,Object> attachment = one("SELECT at.stored_name,at.original_name,a.created_by "
+        identity(session, "TEACHER");
+        Map<String,Object> attachment = one("SELECT at.stored_name,at.original_name "
                 + "FROM assignment_attachments at "
-                + "JOIN assignment_submissions s ON s.submission_id=at.submission_id "
-                + "JOIN assignments a ON a.assignment_id=s.assignment_id "
                 + "WHERE at.attachment_id=?", attachmentId);
-        if (((Number) attachment.get("created_by")).longValue() != me.id()) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
-        }
         Path target = uploads.resolve(attachment.get("stored_name").toString()).normalize();
         if (!target.startsWith(uploads) || !Files.isRegularFile(target)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
@@ -442,14 +483,14 @@ public class AssignmentController {
 
     @GetMapping("/teacher/submissions")
     public List<Map<String,Object>> teacherSubmissions(HttpSession session) {
-        Identity me=identity(session,"TEACHER");
-        try { return db.queryForList("SELECT s.submission_id,a.assignment_id,a.title,u.full_name student,s.status,s.evaluation_status,s.submitted_at,s.score FROM assignment_submissions s JOIN assignments a ON a.assignment_id=s.assignment_id JOIN users u ON u.user_id=s.student_user_id WHERE a.created_by=? ORDER BY s.submitted_at DESC",me.id()); }
+        identity(session,"TEACHER");
+        try { return db.queryForList("SELECT s.submission_id,a.assignment_id,a.subject_id,su.subject_name,a.title,u.full_name student,s.status,s.evaluation_status,s.submitted_at,s.score FROM assignment_submissions s JOIN assignments a ON a.assignment_id=s.assignment_id JOIN subjects su ON su.subject_id=a.subject_id JOIN users u ON u.user_id=s.student_user_id WHERE s.status IN ('SUBMITTED','GRADED') ORDER BY s.submitted_at DESC"); }
         catch (BadSqlGrammarException e) { throw migrationRequired(e); }
     }
 
     @PostMapping("/{assignmentId}/submissions/{submissionId}/evaluate")
     public Map<String,Object> retryEvaluation(@PathVariable long assignmentId,@PathVariable long submissionId,HttpSession session) {
-        Identity me=identity(session,"TEACHER"); requireTeacherOwns(assignmentId,me.id());
+        identity(session,"TEACHER");
         one("SELECT submission_id FROM assignment_submissions WHERE submission_id=? AND assignment_id=? AND status IN ('SUBMITTED','GRADED')",submissionId,assignmentId);
         db.update("UPDATE assignment_submissions SET evaluation_status='PROCESSING' WHERE submission_id=?",submissionId);
         try {
@@ -501,7 +542,7 @@ public class AssignmentController {
 
     @GetMapping("/{assignmentId}/submissions/{submissionId}/review")
     public Map<String,Object> review(@PathVariable long assignmentId,@PathVariable long submissionId,HttpSession session) {
-        Identity me=identity(session,"TEACHER"); requireTeacherOwns(assignmentId,me.id());
+        identity(session,"TEACHER");
         Map<String,Object> s=one("SELECT s.submission_id,s.score,s.feedback,s.status,s.evaluation_status,u.full_name student,a.title assignment FROM assignment_submissions s JOIN users u ON u.user_id=s.student_user_id JOIN assignments a ON a.assignment_id=s.assignment_id WHERE s.submission_id=? AND s.assignment_id=?",submissionId,assignmentId);
         s.put("answers",db.queryForList("SELECT q.question_id,q.question_text,q.model_answer,q.rubric,q.points,aa.answer_text,aa.ai_score,aa.ai_feedback,aa.final_score,aa.final_feedback FROM assignment_answers aa JOIN assignment_questions q ON q.question_id=aa.question_id WHERE aa.submission_id=? ORDER BY q.position",submissionId));
         s.put("answerAttachments",db.queryForList("SELECT aa.question_id,ata.attachment_id,ata.original_name,ata.content_type,ata.size_bytes,ata.uploaded_at FROM assignment_answer_attachments ata JOIN assignment_answers aa ON aa.answer_id=ata.answer_id WHERE aa.submission_id=? ORDER BY aa.question_id,ata.uploaded_at",submissionId));
@@ -510,7 +551,7 @@ public class AssignmentController {
 
     @PutMapping("/{assignmentId}/submissions/{submissionId}/answers/{questionId}/grade")
     public Map<String,Object> grade(@PathVariable long assignmentId,@PathVariable long submissionId,@PathVariable long questionId,@RequestBody Map<String,Object> in,HttpSession session) {
-        Identity me=identity(session,"TEACHER"); requireTeacherOwns(assignmentId,me.id()); BigDecimal score=decimal(in,"score"); String feedback=text(in,"feedback",10000,false);
+        Identity me=identity(session,"TEACHER"); BigDecimal score=decimal(in,"score"); String feedback=text(in,"feedback",10000,false);
         Map<String,Object> q=one("SELECT q.points FROM assignment_questions q JOIN assignment_answers aa ON aa.question_id=q.question_id JOIN assignment_submissions s ON s.submission_id=aa.submission_id WHERE q.question_id=? AND s.submission_id=? AND s.assignment_id=?",questionId,submissionId,assignmentId);
         if(score.signum()<0||score.compareTo((BigDecimal)q.get("points"))>0)throw bad("Final score must be between zero and the question maximum.");
         db.update("UPDATE assignment_answers SET final_score=?,final_feedback=?,evaluated_by=?,evaluated_at=NOW() WHERE question_id=? AND submission_id=?",score,feedback,me.id(),questionId,submissionId);
