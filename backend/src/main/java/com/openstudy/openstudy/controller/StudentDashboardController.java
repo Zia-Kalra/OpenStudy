@@ -49,9 +49,11 @@ public class StudentDashboardController {
     }
 
     @GetMapping("/student/assignments")
-    public String assignments(Model model) {
+    public String assignments(Model model, HttpSession session) {
+        addCurrentUser(model, session);
         model.addAttribute("assignmentUiRole", "STUDENT");
-        return "assignments";
+        model.addAttribute("activePage", "assignments");
+        return "student/assignments";
     }
 
     @GetMapping("/student/results")

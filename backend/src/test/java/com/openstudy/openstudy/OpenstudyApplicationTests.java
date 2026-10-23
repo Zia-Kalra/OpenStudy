@@ -7,7 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import com.openstudy.openstudy.service.ai.AIService;
 import com.openstudy.openstudy.service.ai.MockAIService;
-import com.openstudy.openstudy.service.ai.GeminiAIService;
+import com.openstudy.openstudy.service.ai.GroqAIService;
 import javax.sql.DataSource;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -21,7 +21,7 @@ class OpenstudyApplicationTests {
 	@Test
 	void contextLoads() {
 		assertThat(context.getBeansOfType(DataSource.class)).isEmpty();
-		assertThat(context.getBeansOfType(GeminiAIService.class)).isEmpty();
+		assertThat(context.getBeansOfType(GroqAIService.class)).isEmpty();
 		assertThat(context.getBean(AIService.class)).isInstanceOf(MockAIService.class);
 	}
 

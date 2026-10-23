@@ -20,7 +20,7 @@
       </table></div>
     </section>
     <dialog id="assignmentViewDialog" class="assignment-view-dialog">
-      <div class="dialog-heading"><div><p class="eyebrow">ASSIGNMENT DETAILS</p><h2 id="viewAssignmentTitle">Assignment</h2></div><button class="light" id="closeAssignmentView" type="button">Close</button></div>
+      <div class="dialog-heading"><div><p class="eyebrow">ASSIGNMENT DETAILS</p><h2 id="viewAssignmentTitle">Assignment</h2></div><div class="assignment-dialog-actions"><a id="editDraftAssignment" class="primary-link" hidden>Edit draft</a><button id="deleteDraftAssignment" class="danger" type="button" hidden>Delete draft</button><button class="light" id="closeAssignmentView" type="button">Close</button></div></div>
       <div id="assignmentViewContent"></div>
     </dialog>
   </main>

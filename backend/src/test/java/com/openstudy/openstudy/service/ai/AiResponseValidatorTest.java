@@ -22,7 +22,7 @@ class AiResponseValidatorTest {
                 "Missing",
                 "explanation",
                 "EASY",
-                AiResponseValidator.SOURCE_GEMINI);
+                AiResponseValidator.SOURCE_GROQ);
 
         assertThatThrownBy(() -> validator.validateMcqs(request, List.of(invalid)))
                 .isInstanceOf(AiServiceException.class)
@@ -44,7 +44,7 @@ class AiResponseValidatorTest {
                 "Clear writing.",
                 List.of("Structure"),
                 List.of("Detail"),
-                AiResponseValidator.SOURCE_GEMINI);
+                AiResponseValidator.SOURCE_GROQ);
 
         assertThat(result.getSuggestedScore()).isEqualTo(10.0);
         assertThat(result.isScoreAdjusted()).isTrue();
@@ -61,7 +61,7 @@ class AiResponseValidatorTest {
         request.setModelAnswer("M");
 
         assertThatThrownBy(() -> validator.validateEvaluation(
-                        request, 5, "  ", List.of(), List.of(), AiResponseValidator.SOURCE_GEMINI))
+                        request, 5, "  ", List.of(), List.of(), AiResponseValidator.SOURCE_GROQ))
                 .isInstanceOf(AiServiceException.class)
                 .extracting(ex -> ((AiServiceException) ex).getErrorCode())
                 .isEqualTo(AiErrorCode.VALIDATION_FAILED);
@@ -77,7 +77,7 @@ class AiResponseValidatorTest {
     }
 
     private GeneratedMCQDTO question(List<String> options, String answer) {
-        return new GeneratedMCQDTO("Question", options, answer, "Explanation", "EASY", "GEMINI");
+        return new GeneratedMCQDTO("Question", options, answer, "Explanation", "EASY", "GROQ");
     }
 
     @Test
@@ -110,7 +110,7 @@ class AiResponseValidatorTest {
         assertThat(result.getFirst().getCorrectOption()).isEqualTo("Linear");
         assertThat(result.getFirst().getOptions()).contains("Linear");
         assertThatThrownBy(() -> validator.validateMcqs(request(), List.of(new GeneratedMCQDTO(
-                "Q", List.of("A", "B", "C", "D"), "A", "E", "UNKNOWN", "GEMINI"))))
+                "Q", List.of("A", "B", "C", "D"), "A", "E", "UNKNOWN", "GROQ"))))
                 .isInstanceOf(AiServiceException.class);
     }
 
@@ -118,7 +118,7 @@ class AiResponseValidatorTest {
     void rejectsNonfiniteSuggestedScores() {
         for (double score : new double[] { Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY }) {
             assertThatThrownBy(() -> validator.validateEvaluation(AiRequestValidationTest.evaluation(), score,
-                    "Feedback", List.of(), List.of(), "GEMINI")).isInstanceOf(AiServiceException.class);
+                    "Feedback", List.of(), List.of(), "GROQ")).isInstanceOf(AiServiceException.class);
         }
     }
 
@@ -126,25 +126,25 @@ class AiResponseValidatorTest {
     void roundedScoreNeverExceedsOriginalMaximum() {
         var request = AiRequestValidationTest.evaluation();
         request.setMaximumMarks(1.006);
-        var result = validator.validateEvaluation(request, 1.006, "Feedback", List.of(), List.of(), "GEMINI");
+        var result = validator.validateEvaluation(request, 1.006, "Feedback", List.of(), List.of(), "GROQ");
         assertThat(result.getSuggestedScore()).isEqualTo(1.00);
         assertThat(result.getMaximumScore()).isEqualTo(1.006);
         assertThat(result.isScoreAdjusted()).isTrue();
         request.setMaximumMarks(0.004);
-        assertThat(validator.validateEvaluation(request, 0.004, "F", List.of(), List.of(), "GEMINI")
+        assertThat(validator.validateEvaluation(request, 0.004, "F", List.of(), List.of(), "GROQ")
                 .getSuggestedScore()).isZero();
     }
 
     @Test
     void roundsHalfUpWithoutOverflowAndClampsNegativeScores() {
         var request = AiRequestValidationTest.evaluation();
-        assertThat(validator.validateEvaluation(request, 1.005, "F", List.of(), List.of(), "GEMINI")
+        assertThat(validator.validateEvaluation(request, 1.005, "F", List.of(), List.of(), "GROQ")
                 .getSuggestedScore()).isEqualTo(1.01);
-        var negative = validator.validateEvaluation(request, -1, "F", List.of(), List.of(), "GEMINI");
+        var negative = validator.validateEvaluation(request, -1, "F", List.of(), List.of(), "GROQ");
         assertThat(negative.getSuggestedScore()).isZero();
         assertThat(negative.isScoreAdjusted()).isTrue();
         request.setMaximumMarks(Double.MAX_VALUE);
-        assertThat(validator.validateEvaluation(request, Double.MAX_VALUE, "F", List.of(), List.of(), "GEMINI")
+        assertThat(validator.validateEvaluation(request, Double.MAX_VALUE, "F", List.of(), List.of(), "GROQ")
                 .getSuggestedScore()).isFinite().isLessThanOrEqualTo(request.getMaximumMarks());
     }
 }

@@ -19,7 +19,7 @@
       <label>Total marks *<input id="totalMarks" type="number" min="0.01" step="0.01" required placeholder="Enter maximum marks"></label>
       <label>Due date *<input id="assignmentDue" type="datetime-local" required></label>
       <label>Instructions (optional)<textarea id="assignmentInstructions" maxlength="5000"></textarea></label>
-      <fieldset class="attempt-duration"><legend>Attempt duration *</legend><label>Hours<input id="attemptHours" type="number" min="0" max="720" value="1" required></label><label>Minutes<input id="attemptMinutes" type="number" min="0" max="59" value="0" required></label></fieldset>
+      <fieldset class="attempt-duration"><legend>Attempt duration *</legend><label>Hours<input id="attemptHours" type="number" min="0" max="720" placeholder="Value"></label><label>Minutes<input id="attemptMinutes" type="number" min="0" max="59" placeholder="Value"></label></fieldset>
       <div class="create-actions"><button class="primary-link" type="submit">Next: Add Questions <span aria-hidden="true">→</span></button></div>
     </form>
   </section>
@@ -29,12 +29,19 @@
         <label>Question *<textarea id="questionText" maxlength="5000" required></textarea></label>
         <div class="form-grid"><label>Question type<select id="questionType"><option value="LONG_TEXT">Long answer</option><option value="SHORT_TEXT">Short answer</option></select></label><label>Marks *<input id="questionPoints" type="number" min="0.01" step="0.01" required></label></div>
         <label>Model answer *<textarea id="modelAnswer" maxlength="10000" required></textarea></label><label>Rubric (optional)<textarea id="questionRubric" maxlength="10000"></textarea></label>
-        <div class="create-actions"><button type="submit" class="primary-link">Add Question</button></div>
+        <div class="create-actions"><button id="saveQuestionButton" type="submit" class="primary-link">Add Question</button><button id="cancelQuestionEdit" type="button" class="light" hidden>Cancel edit</button></div>
       </form>
     </div>
     <div class="panel"><h3>Questions</h3><ol id="draftQuestions" class="draft-question-list"></ol><p id="noQuestions" class="panel-subtitle">No questions added yet.</p></div>
+    <dialog id="questionViewDialog" class="assignment-view-dialog question-view-dialog" aria-labelledby="questionViewTitle">
+      <div class="dialog-heading"><h3 id="questionViewTitle">Assignment question</h3><button id="closeQuestionView" class="light" type="button">Close</button></div>
+      <dl class="assignment-detail-grid"><div><dt>Question type</dt><dd id="viewQuestionType"></dd></div><div><dt>Marks</dt><dd id="viewQuestionPoints"></dd></div></dl>
+      <h4>Question</h4><p id="viewQuestionText" class="question-view-copy"></p>
+      <h4>Model answer</h4><p id="viewModelAnswer" class="question-view-copy"></p>
+      <section id="viewRubricSection"><h4>Rubric</h4><p id="viewQuestionRubric" class="question-view-copy"></p></section>
+    </dialog>
     <details class="panel ai-question-panel"><summary>Generate question suggestions with AI</summary><p class="panel-subtitle">Review every suggestion before adding it to the assignment.</p>
-      <form id="suggestionForm" class="form-grid"><label>Topic<input id="suggestionTopic" required maxlength="300"></label><label>Number of questions<input id="suggestionCount" type="number" min="1" max="20" value="3"></label><label>Difficulty<select id="suggestionDifficulty"><option>Easy</option><option selected>Medium</option><option>Hard</option></select></label><label>Marks each<input id="suggestionPoints" type="number" min="0.01" step="0.01" value="5"></label><button class="light" type="submit">Generate suggestions</button></form><div id="suggestions"></div>
+      <form id="suggestionForm" class="form-grid"><label>Topic<input id="suggestionTopic" required maxlength="300"></label><label>Number of questions<input id="suggestionCount" type="number" min="1" max="20" value="3"></label><label>Question type<select id="suggestionType"><option value="LONG_TEXT">Long answer</option><option value="SHORT_TEXT">Short answer</option></select></label><label>Difficulty<select id="suggestionDifficulty"><option>Easy</option><option selected>Medium</option><option>Hard</option></select></label><label>Marks each<input id="suggestionPoints" type="number" min="0.01" step="0.01" value="5"></label><button class="light" type="submit">Generate suggestions</button></form><div id="suggestions"></div>
     </details>
     <div class="create-actions create-footer-actions"><button id="backToDetails" class="light" type="button">Back to details</button><button id="publishAssignment" class="primary-link" type="button">Publish Assignment</button></div>
   </section>

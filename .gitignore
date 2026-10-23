@@ -21,3 +21,7 @@ replay_pid*
 # Aiven SSL certificate and Java truststore
 # ==========================================
 backend/certs/*
+
+# Local VS Code launch settings can contain secrets.
+.vscode/launch.json
+backend/.vscode/launch.json

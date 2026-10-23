@@ -13,22 +13,21 @@
     <header class="teacher-assignment-heading"><div><p class="eyebrow">TEACHER WORKSPACE</p><h2>Submissions</h2><p>Evaluate submissions and review student work.</p></div></header>
     <div id="evaluationNotice" class="assignment-notice" role="status" aria-live="polite"></div>
     <section class="panel evaluation-panel" id="evaluation">
-      <div class="evaluation-toolbar"><div><h3 id="evaluationTitle">All Submissions</h3><p>Review submissions and run AI evaluation.</p></div>
+        <div class="evaluation-toolbar"><div><h3 id="evaluationTitle">All Submissions</h3><p>Review student work manually or use AI suggestions, then confirm the marks.</p></div>
         <label class="assignment-filter-label">Assignment<select id="assignmentFilter"><option value="all">All assignments</option></select></label>
       </div>
       <div class="evaluation-tabs" role="tablist" aria-label="Filter submissions">
         <button type="button" class="active" data-filter="all" role="tab" aria-selected="true">All Submissions</button>
-        <button type="button" data-filter="pending" role="tab" aria-selected="false">Pending AI Evaluation</button>
-        <button type="button" data-filter="evaluated" role="tab" aria-selected="false">AI Evaluated</button>
-        <button type="button" data-filter="review" role="tab" aria-selected="false">Teacher Review</button>
-        <button type="button" data-filter="finalized" role="tab" aria-selected="false">Finalized</button>
+        <button type="button" data-filter="pending" role="tab" aria-selected="false">Pending</button>
+        <button type="button" data-filter="ai-evaluated" role="tab" aria-selected="false">AI Evaluated</button>
+        <button type="button" data-filter="manually-evaluated" role="tab" aria-selected="false">Manually Evaluated</button>
       </div>
       <div class="evaluation-table-wrap"><table class="evaluation-table">
         <thead><tr><th>Student</th><th>Assignment</th><th>Submitted On</th><th>Status</th><th>Actions</th></tr></thead>
         <tbody id="submissionRows"><tr><td colspan="5">Loading submissions…</td></tr></tbody>
       </table></div>
     </section>
-    <dialog id="evaluationDialog" class="evaluation-dialog"><div class="dialog-heading"><div><p class="eyebrow">SUBMISSION REVIEW</p><h2 id="reviewHeading">AI Evaluation</h2></div><button type="button" class="light" id="closeReview">Close</button></div><div id="reviewContent"></div></dialog>
+    <dialog id="evaluationDialog" class="evaluation-dialog"><div class="dialog-heading"><div><p class="eyebrow">SUBMISSION REVIEW</p><h2 id="reviewHeading">Evaluation</h2></div><button type="button" class="light" id="closeReview">Close</button></div><div id="reviewContent"></div></dialog>
   </main>
   <jsp:include page="fragments/footer.jsp"/>
 </div></div>

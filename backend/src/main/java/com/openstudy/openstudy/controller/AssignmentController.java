@@ -1,13 +1,15 @@
 package com.openstudy.openstudy.controller;
 
-import com.openstudy.openstudy.service.GeminiAiService;
+import com.openstudy.openstudy.service.AssignmentAiService;
 import com.openstudy.openstudy.model.User;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.BadSqlGrammarException;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
@@ -18,7 +20,12 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.server.ResponseStatusException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -28,6 +35,8 @@ import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.sql.Timestamp;
 import java.util.*;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
@@ -36,11 +45,13 @@ import org.springframework.jdbc.support.KeyHolder;
 @RequestMapping("/api/assignments")
 @Profile("!mock")
 public class AssignmentController {
+    private static final Logger log = LoggerFactory.getLogger(AssignmentController.class);
+    private static final ZoneId APP_ZONE = ZoneId.of("Asia/Kolkata");
     private final JdbcTemplate db;
-    private final GeminiAiService ai;
+    private final AssignmentAiService ai;
     private final Path uploads = Path.of(System.getProperty("openstudy.upload-dir", "uploads/assignments")).toAbsolutePath().normalize();
 
-    public AssignmentController(JdbcTemplate db, GeminiAiService ai) { this.db = db; this.ai = ai; }
+    public AssignmentController(JdbcTemplate db, AssignmentAiService ai) { this.db = db; this.ai = ai; }
 
     private record Identity(long id, String role) {}
     private Identity identity(HttpSession session, String role) {
@@ -66,6 +77,13 @@ public class AssignmentController {
     private Map<String,Object> one(String sql, Object... args) {
         try { return db.queryForMap(sql,args); } catch (EmptyResultDataAccessException e) { throw new ResponseStatusException(HttpStatus.NOT_FOUND); }
     }
+    private static LocalDateTime localDateTime(Object value) {
+        if (value instanceof LocalDateTime dateTime) return dateTime;
+        if (value instanceof Timestamp timestamp) return timestamp.toLocalDateTime();
+        throw new IllegalStateException("Expected a local database date/time but got " +
+                (value == null ? "null" : value.getClass().getName()));
+    }
+    private static LocalDateTime nowIst() { return LocalDateTime.now(APP_ZONE); }
 
     @GetMapping("/subjects")
     public List<Map<String,Object>> subjects(HttpSession session) {
@@ -108,21 +126,59 @@ public class AssignmentController {
         LocalDateTime due;
         try { due=LocalDateTime.parse(text(in,"dueAt",30,true)); }
         catch (Exception e) { throw bad("Enter a valid submission deadline."); }
-        if(!due.isAfter(LocalDateTime.now())) throw bad("Submission deadline must be in the future.");
+        if(!due.isAfter(nowIst())) throw bad("Submission deadline must be in the future.");
         if (!db.queryForList("SELECT subject_id FROM subject_teachers WHERE subject_id=? AND teacher_id=?", Integer.class, subject, me.id()).contains(subject)) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         long id = insertAndGetId("INSERT INTO assignments(subject_id,created_by,title,instructions,due_at,max_score,status,attempt_duration_minutes) VALUES(?,?,?,?,?,?,'DRAFT',?)",
                 subject, me.id(), title, instructions, due, max, hours*60+minutes);
         return Map.of("assignmentId",id,"status","DRAFT");
     }
 
+    @PutMapping("/{id}") @Transactional
+    public Map<String,Object> updateDraft(@PathVariable long id,@RequestBody Map<String,Object> in,HttpSession session) {
+        Identity me=identity(session,"TEACHER"); requireTeacherOwns(id,me.id());
+        Map<String,Object> existing=one("SELECT status FROM assignments WHERE assignment_id=? AND created_by=?",id,me.id());
+        if (!"DRAFT".equals(existing.get("status").toString())) throw bad("Only draft assignments can be edited.");
+        String title=text(in,"title",200,true), instructions=text(in,"instructions",10000,true);
+        int subject=integer(in,"subjectId",1,Integer.MAX_VALUE);
+        int hours=optionalInteger(in,"hours",0,24*30), minutes=optionalInteger(in,"minutes",0,59);
+        if(hours*60+minutes<1 || hours*60+minutes>24*30) throw bad("Attempt duration must be between 1 minute and 30 days.");
+        BigDecimal max=decimal(in,"maxScore"); if(max.signum()<=0) throw bad("Maximum marks must be greater than zero.");
+        LocalDateTime due;
+        try { due=LocalDateTime.parse(text(in,"dueAt",30,true)); }
+        catch(Exception e) { throw bad("Enter a valid submission deadline."); }
+        if(!due.isAfter(nowIst())) throw bad("Submission deadline must be in the future.");
+        if(db.queryForList("SELECT subject_id FROM subject_teachers WHERE subject_id=? AND teacher_id=?",Integer.class,subject,me.id()).isEmpty())
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Choose one of your available subjects.");
+        db.update("UPDATE assignments SET subject_id=?,title=?,instructions=?,due_at=?,max_score=?,attempt_duration_minutes=? WHERE assignment_id=? AND created_by=? AND status='DRAFT'",
+                subject,title,instructions,due,max,hours*60+minutes,id,me.id());
+        return Map.of("assignmentId",id,"status","DRAFT","saved",true);
+    }
+
+    @DeleteMapping("/{id}") @Transactional
+    public Map<String,Object> deleteDraft(@PathVariable long id,HttpSession session) {
+        Identity me=identity(session,"TEACHER");
+        Map<String,Object> assignment=one("SELECT status FROM assignments WHERE assignment_id=? AND created_by=?",id,me.id());
+        if (!"DRAFT".equals(assignment.get("status").toString()))
+            throw new ResponseStatusException(HttpStatus.CONFLICT,"Only draft assignments can be deleted.");
+        Integer submissions=db.queryForObject("SELECT COUNT(*) FROM assignment_submissions WHERE assignment_id=?",Integer.class,id);
+        if (submissions != null && submissions > 0)
+            throw new ResponseStatusException(HttpStatus.CONFLICT,"This draft has submissions and cannot be deleted.");
+        db.update("DELETE FROM assignment_questions WHERE assignment_id=?",id);
+        if(db.update("DELETE FROM assignments WHERE assignment_id=? AND created_by=? AND status='DRAFT'",id,me.id())==0)
+            throw new ResponseStatusException(HttpStatus.CONFLICT,"The assignment is no longer a draft.");
+        return Map.of("deleted",true);
+    }
+
     @PostMapping("/{id}/questions") @Transactional
     public Map<String,Object> questions(@PathVariable long id,@RequestBody Map<String,Object> in,HttpSession session) {
         Identity me=identity(session,"TEACHER"); requireTeacherOwns(id,me.id());
-        Map<String,Object> a=one("SELECT max_score,status FROM assignments WHERE assignment_id=?",id);
+        Map<String,Object> a=one("SELECT max_score,status FROM assignments WHERE assignment_id=? FOR UPDATE",id);
         if (!"DRAFT".equals(a.get("status").toString())) throw bad("Questions can only be edited while the assignment is a draft.");
         String q=text(in,"questionText",5000,true), type=text(in,"questionType",20,true), answer=text(in,"modelAnswer",10000,true), rubric=text(in,"rubric",10000,false);
         if (!List.of("SHORT_TEXT","LONG_TEXT").contains(type)) throw bad("Choose SHORT_TEXT or LONG_TEXT.");
         BigDecimal points=decimal(in,"points"); if(points.signum()<=0) throw bad("Question marks must be positive.");
+        BigDecimal max=(BigDecimal)a.get("max_score"), current=questionMarks(id,null);
+        if(current.add(points).compareTo(max)>0) throw bad("Adding this question would exceed the assignment's total marks. Remaining marks: " + max.subtract(current).stripTrailingZeros().toPlainString() + ".");
         Integer pos=db.queryForObject("SELECT COALESCE(MAX(position),0)+1 FROM assignment_questions WHERE assignment_id=?",Integer.class,id);
         long questionId = insertAndGetId("INSERT INTO assignment_questions(assignment_id,question_text,question_type,model_answer,rubric,points,position) VALUES(?,?,?,?,?,?,?)",id,q,type,answer,rubric,points,pos);
         return Map.of("questionId",questionId,"position",pos);
@@ -131,9 +187,12 @@ public class AssignmentController {
     @PutMapping("/{id}/questions/{questionId}") @Transactional
     public Map<String,Object> editQuestion(@PathVariable long id,@PathVariable long questionId,@RequestBody Map<String,Object> in,HttpSession session) {
         Identity me=identity(session,"TEACHER");requireTeacherOwns(id,me.id());
-        if(db.queryForList("SELECT assignment_id FROM assignments WHERE assignment_id=? AND status='DRAFT'",Long.class,id).isEmpty())throw bad("Only draft questions can be changed.");
+        Map<String,Object> assignment=one("SELECT max_score FROM assignments WHERE assignment_id=? AND created_by=? AND status='DRAFT' FOR UPDATE",id,me.id());
         String q=text(in,"questionText",5000,true),type=text(in,"questionType",20,true),answer=text(in,"modelAnswer",10000,true),rubric=text(in,"rubric",10000,false);BigDecimal points=decimal(in,"points");
         if(!List.of("SHORT_TEXT","LONG_TEXT").contains(type)||points.signum()<=0)throw bad("Question type and marks are invalid.");
+        if(db.queryForList("SELECT question_id FROM assignment_questions WHERE assignment_id=? AND question_id=?",Long.class,id,questionId).isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        BigDecimal current=questionMarks(id,questionId), max=(BigDecimal)assignment.get("max_score");
+        if(current.add(points).compareTo(max)>0) throw bad("Editing this question would exceed the assignment's total marks. Remaining marks for this question: " + max.subtract(current).stripTrailingZeros().toPlainString() + ".");
         if(db.update("UPDATE assignment_questions SET question_text=?,question_type=?,model_answer=?,rubric=?,points=? WHERE assignment_id=? AND question_id=?",q,type,answer,rubric,points,id,questionId)==0)throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         return Map.of("saved",true);
     }
@@ -151,8 +210,45 @@ public class AssignmentController {
         Identity me=identity(session,"TEACHER"); requireTeacherOwns(id,me.id());
         int count=integer(in,"count",1,20); BigDecimal points=decimal(in,"points");
         if(points.signum()<=0) throw bad("Points must be positive.");
+        Map<String,Object> assignment=one("SELECT max_score,status FROM assignments WHERE assignment_id=? AND created_by=?",id,me.id());
+        if (!"DRAFT".equals(assignment.get("status").toString())) throw bad("Questions can only be generated for a draft assignment.");
+        BigDecimal remaining=((BigDecimal)assignment.get("max_score")).subtract(questionMarks(id,null));
+        if(points.multiply(BigDecimal.valueOf(count)).compareTo(remaining)>0)
+            throw bad("The requested suggestions exceed the remaining " + remaining.stripTrailingZeros().toPlainString() + " marks. Reduce the question count or marks each.");
         String type=text(in,"questionType",20,true); if(!List.of("SHORT_TEXT","LONG_TEXT").contains(type)) throw bad("Invalid question type.");
-        return Map.of("questions",ai.generateAssignmentQuestions(text(in,"topic",300,true),count,type,text(in,"difficulty",20,true),points));
+        if (!ai.isConfigured()) throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                "AI suggestions are not configured. Set GROQ_API_KEY for the backend and restart it.");
+        String topic=text(in,"topic",300,true), difficulty=text(in,"difficulty",20,true);
+        List<String> existingQuestions=db.queryForList(
+                "SELECT question_text FROM assignment_questions WHERE assignment_id=? ORDER BY position",String.class,id);
+        try {
+            AssignmentAiService.QuestionSuggestions suggestions=ai.generateAssignmentQuestions(
+                    topic,count,type,difficulty,points,existingQuestions);
+            return Map.of("questions",suggestions.questions(),"duplicatesOmitted",suggestions.duplicatesOmitted());
+        } catch (RestClientResponseException e) {
+            String providerError=e.getResponseBodyAsString();
+            if(providerError.length()>1500) providerError=providerError.substring(0,1500);
+            log.error("Groq API returned HTTP {}: {}",e.getStatusCode().value(),providerError);
+            if(e.getStatusCode().value()==503)
+                throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                        "Groq is temporarily busy. The backend retried the request; please try again shortly.", e);
+            if(e.getStatusCode().value()==429)
+                throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
+                        "AI limit exhausted. Groq's request quota or rate limit has been reached. Check your Groq quota or try again after it resets.", e);
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                    "Groq rejected the request (HTTP " + e.getStatusCode().value() + "). Check the backend log for Groq's error details.", e);
+        } catch (ResourceAccessException e) {
+            log.error("Could not connect to the Groq API.",e);
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                    "The backend could not connect to Groq. Check the backend log and network connection.", e);
+        } catch (RestClientException e) {
+            log.error("Groq API client error.",e);
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                    "Groq could not generate suggestions. Check the backend log for details.", e);
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                    "Groq returned an unusable response. Try again, or reduce the number of requested questions.", e);
+        }
     }
 
     @PostMapping("/{id}/publish") @Transactional
@@ -178,27 +274,27 @@ public class AssignmentController {
     @GetMapping("/teacher/{id}")
     public Map<String,Object> teacherAssignment(@PathVariable long id,HttpSession session) {
         Identity me=identity(session,"TEACHER");requireTeacherOwns(id,me.id());
-        Map<String,Object> a=one("SELECT a.assignment_id,a.title,a.instructions,a.status,a.max_score,a.due_at,a.created_at,s.subject_name FROM assignments a JOIN subjects s ON s.subject_id=a.subject_id WHERE a.assignment_id=? AND a.created_by=?",id,me.id());
+        Map<String,Object> a=one("SELECT a.assignment_id,a.subject_id,a.title,a.instructions,a.status,a.max_score,a.due_at,a.created_at,a.attempt_duration_minutes,s.subject_name FROM assignments a JOIN subjects s ON s.subject_id=a.subject_id WHERE a.assignment_id=? AND a.created_by=?",id,me.id());
         a.put("questions",db.queryForList("SELECT question_id,question_text,question_type,model_answer,rubric,points,position FROM assignment_questions WHERE assignment_id=? ORDER BY position",id));return a;
     }
 
     @GetMapping
     public List<Map<String,Object>> published(HttpSession session) {
         Identity me=identity(session,"STUDENT");
-        return db.queryForList("SELECT a.assignment_id,a.title,a.instructions,a.due_at,a.max_score,a.attempt_duration_minutes,a.status,s.subject_name,(SELECT COUNT(*) FROM assignment_questions q WHERE q.assignment_id=a.assignment_id) question_count FROM assignments a JOIN subjects s ON s.subject_id=a.subject_id JOIN subject_enrollments e ON e.subject_id=a.subject_id AND e.student_user_id=? AND e.enrollment_status='ENROLLED' WHERE a.status='PUBLISHED' AND a.due_at>NOW() ORDER BY a.due_at",me.id());
+        return db.queryForList("SELECT a.assignment_id,a.title,a.instructions,a.created_at,a.due_at,a.max_score,a.attempt_duration_minutes,a.status,s.subject_name,(SELECT COUNT(*) FROM assignment_questions q WHERE q.assignment_id=a.assignment_id) question_count FROM assignments a JOIN subjects s ON s.subject_id=a.subject_id WHERE a.status='PUBLISHED' AND NOT EXISTS (SELECT 1 FROM assignment_submissions submitted WHERE submitted.assignment_id=a.assignment_id AND submitted.student_user_id=? AND submitted.status<>'DRAFT') ORDER BY a.due_at,a.created_at",me.id());
     }
 
     @GetMapping("/{id}")
     public Map<String,Object> detail(@PathVariable long id,HttpSession session) {
         Identity me=identity(session,"STUDENT");
-        Map<String,Object> a=one("SELECT a.assignment_id,a.title,a.instructions,a.due_at,a.max_score,a.attempt_duration_minutes,a.status,s.subject_name FROM assignments a JOIN subjects s ON s.subject_id=a.subject_id JOIN subject_enrollments e ON e.subject_id=a.subject_id AND e.student_user_id=? AND e.enrollment_status='ENROLLED' WHERE a.assignment_id=? AND a.status='PUBLISHED' AND a.due_at>NOW()",me.id(),id);
+        Map<String,Object> a=one("SELECT a.assignment_id,a.title,a.instructions,a.due_at,a.max_score,a.attempt_duration_minutes,a.status,s.subject_name FROM assignments a JOIN subjects s ON s.subject_id=a.subject_id WHERE a.assignment_id=? AND a.status='PUBLISHED' AND a.due_at>NOW()",id);
         a.put("questions",db.queryForList("SELECT question_id,question_text,question_type,points,position FROM assignment_questions WHERE assignment_id=? ORDER BY position",id)); return a;
     }
 
     @PostMapping("/{id}/start") @Transactional
     public Map<String,Object> start(@PathVariable long id,HttpSession session) {
-        Identity me=identity(session,"STUDENT"); Map<String,Object> a=one("SELECT a.assignment_id,a.attempt_duration_minutes,a.due_at FROM assignments a JOIN subject_enrollments e ON e.subject_id=a.subject_id AND e.student_user_id=? AND e.enrollment_status='ENROLLED' WHERE a.assignment_id=? AND a.status='PUBLISHED'",me.id(),id);
-        if(!((java.sql.Timestamp)a.get("due_at")).toLocalDateTime().isAfter(LocalDateTime.now())) throw bad("The submission deadline has passed.");
+        Identity me=identity(session,"STUDENT"); Map<String,Object> a=one("SELECT a.assignment_id,a.attempt_duration_minutes,a.due_at FROM assignments a WHERE a.assignment_id=? AND a.status='PUBLISHED'",id);
+        if(!localDateTime(a.get("due_at")).isAfter(nowIst())) throw bad("The submission deadline has passed.");
         List<Map<String,Object>> existing=db.queryForList("SELECT submission_id,attempt_started_at,attempt_expires_at,status FROM assignment_submissions WHERE assignment_id=? AND student_user_id=?",id,me.id());
         long sid; if(existing.isEmpty()) {
             sid=insertAndGetId("INSERT INTO assignment_submissions(assignment_id,student_user_id,status,attempt_started_at,attempt_expires_at) VALUES(?,?,'DRAFT',NOW(),LEAST(DATE_ADD(NOW(),INTERVAL ? MINUTE),?))",id,me.id(),a.get("attempt_duration_minutes"),a.get("due_at"));
@@ -211,6 +307,9 @@ public class AssignmentController {
         Identity me=identity(session,"STUDENT");
         Map<String,Object> attempt=one("SELECT s.submission_id,s.assignment_id,s.status,s.attempt_started_at,s.attempt_expires_at,NOW() server_time,a.title,a.due_at,a.max_score FROM assignment_submissions s JOIN assignments a ON a.assignment_id=s.assignment_id WHERE s.submission_id=? AND s.student_user_id=?",submissionId,me.id());
         attempt.put("questions",db.queryForList("SELECT q.question_id,q.question_text,q.question_type,q.points,q.position,aa.answer_text FROM assignment_questions q LEFT JOIN assignment_answers aa ON aa.question_id=q.question_id AND aa.submission_id=? WHERE q.assignment_id=? ORDER BY q.position",submissionId,attempt.get("assignment_id")));
+        for (Map<String,Object> question : (List<Map<String,Object>>) attempt.get("questions")) {
+            question.put("attachments", db.queryForList("SELECT ata.attachment_id,ata.original_name,ata.content_type,ata.size_bytes FROM assignment_answer_attachments ata JOIN assignment_answers aa ON aa.answer_id=ata.answer_id WHERE aa.submission_id=? AND aa.question_id=? ORDER BY ata.uploaded_at", submissionId, question.get("question_id")));
+        }
         attempt.put("attachments",db.queryForList("SELECT attachment_id,original_name,size_bytes,uploaded_at FROM assignment_attachments WHERE submission_id=?",submissionId));
         return attempt;
     }
@@ -219,9 +318,51 @@ public class AssignmentController {
     public Map<String,Object> saveAnswer(@PathVariable long submissionId,@PathVariable long questionId,@RequestBody Map<String,Object> in,HttpSession session) {
         Identity me=identity(session,"STUDENT"); String answer=text(in,"answer",30000,false);
         Map<String,Object> row=one("SELECT s.assignment_id,s.attempt_expires_at,s.status,a.due_at,q.question_id FROM assignment_submissions s JOIN assignments a ON a.assignment_id=s.assignment_id JOIN assignment_questions q ON q.assignment_id=s.assignment_id AND q.question_id=? WHERE s.submission_id=? AND s.student_user_id=?",questionId,submissionId,me.id());
-        if(!"DRAFT".equals(row.get("status").toString()) || row.get("attempt_expires_at")==null || !((java.sql.Timestamp)row.get("attempt_expires_at")).toLocalDateTime().isAfter(LocalDateTime.now()) || !((java.sql.Timestamp)row.get("due_at")).toLocalDateTime().isAfter(LocalDateTime.now())) throw bad("This attempt is no longer editable.");
+        if(!"DRAFT".equals(row.get("status").toString())) throw bad("This attempt has already been submitted.");
         db.update("INSERT INTO assignment_answers(submission_id,question_id,answer_text) VALUES(?,?,?) ON DUPLICATE KEY UPDATE answer_text=VALUES(answer_text)",submissionId,questionId,answer);
         return Map.of("saved",true);
+    }
+
+    @PostMapping("/submissions/{submissionId}/answers/{questionId}/attachments")
+    public Map<String,Object> uploadAnswerAttachment(@PathVariable long submissionId,@PathVariable long questionId,
+            @RequestParam("file") MultipartFile file,HttpSession session) throws IOException {
+        Identity me=identity(session,"STUDENT");
+        Map<String,Object> row=one("SELECT aa.answer_id,s.status FROM assignment_submissions s JOIN assignments a ON a.assignment_id=s.assignment_id JOIN assignment_questions q ON q.assignment_id=s.assignment_id AND q.question_id=? LEFT JOIN assignment_answers aa ON aa.submission_id=s.submission_id AND aa.question_id=q.question_id WHERE s.submission_id=? AND s.student_user_id=? AND a.status='PUBLISHED'",questionId,submissionId,me.id());
+        if(!"DRAFT".equals(row.get("status").toString()) || file.isEmpty() || file.getSize()>10*1024*1024) throw bad("Choose a non-empty PNG, JPEG or PDF file up to 10 MB during an active attempt.");
+        String raw=Objects.requireNonNullElse(file.getOriginalFilename(),"attachment").replace('\\','/');
+        String original=raw.substring(raw.lastIndexOf('/')+1);
+        String ext=original.contains(".")?original.substring(original.lastIndexOf('.')+1).toLowerCase(Locale.ROOT):"";
+        byte[] bytes=file.getBytes();
+        String contentType=verifiedAttachmentType(ext,bytes);
+        if(contentType==null) throw bad("Allowed files are PNG, JPEG and PDF, and the file contents must match the extension.");
+        if(original.isBlank() || original.length()>180 || original.chars().anyMatch(Character::isISOControl)) throw bad("The filename is invalid.");
+        Object answerId=row.get("answer_id");
+        if(answerId==null) {
+            db.update("INSERT INTO assignment_answers(submission_id,question_id,answer_text) VALUES(?,?, '') ON DUPLICATE KEY UPDATE answer_id=LAST_INSERT_ID(answer_id)",submissionId,questionId);
+            answerId=db.queryForObject("SELECT answer_id FROM assignment_answers WHERE submission_id=? AND question_id=?",Long.class,submissionId,questionId);
+        }
+        long id=insertAndGetId("INSERT INTO assignment_answer_attachments(answer_id,original_name,content_type,size_bytes,file_data) VALUES(?,?,?,?,?)",answerId,original,contentType,file.getSize(),bytes);
+        return Map.of("attachment_id",id,"original_name",original,"content_type",contentType,"size_bytes",file.getSize());
+    }
+
+    private String verifiedAttachmentType(String extension,byte[] bytes) {
+        if(extension.equals("png") && bytes.length>=8 && (bytes[0]&255)==0x89 && bytes[1]==0x50 && bytes[2]==0x4e && bytes[3]==0x47 && bytes[4]==0x0d && bytes[5]==0x0a && bytes[6]==0x1a && bytes[7]==0x0a) return "image/png";
+        if((extension.equals("jpg")||extension.equals("jpeg")) && bytes.length>=3 && (bytes[0]&255)==0xff && (bytes[1]&255)==0xd8 && (bytes[2]&255)==0xff) return "image/jpeg";
+        if(extension.equals("pdf") && bytes.length>=5) {
+            int limit=Math.min(bytes.length-5,1024);
+            for(int i=0;i<=limit;i++) if(bytes[i]==0x25 && bytes[i+1]==0x50 && bytes[i+2]==0x44 && bytes[i+3]==0x46 && bytes[i+4]==0x2d) return "application/pdf";
+        }
+        return null;
+    }
+
+    @GetMapping("/answer-attachments/{attachmentId}")
+    public ResponseEntity<Resource> downloadAnswerAttachment(@PathVariable long attachmentId,HttpSession session) {
+        Identity me=identity(session,"TEACHER");
+        Map<String,Object> file=one("SELECT ata.original_name,ata.content_type,ata.size_bytes,ata.file_data,a.created_by FROM assignment_answer_attachments ata JOIN assignment_answers aa ON aa.answer_id=ata.answer_id JOIN assignment_submissions s ON s.submission_id=aa.submission_id JOIN assignments a ON a.assignment_id=s.assignment_id WHERE ata.attachment_id=?",attachmentId);
+        if(((Number)file.get("created_by")).longValue()!=me.id()) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION,ContentDisposition.inline().filename(file.get("original_name").toString(),StandardCharsets.UTF_8).build().toString())
+                .contentType(MediaType.parseMediaType(file.get("content_type").toString())).contentLength(((Number)file.get("size_bytes")).longValue())
+                .body(new ByteArrayResource((byte[])file.get("file_data")));
     }
 
     @PostMapping("/submissions/{submissionId}/attachments")
@@ -230,13 +371,14 @@ public class AssignmentController {
         if(!"DRAFT".equals(s.get("status").toString()) || file.isEmpty() || file.getSize()>10*1024*1024) throw bad("Choose a file up to 10 MB while your attempt is active.");
         String raw=Objects.requireNonNullElse(file.getOriginalFilename(),"attachment").replace('\\','/');
         String original=raw.substring(raw.lastIndexOf('/')+1);
-        String ext=original.contains(".")?original.substring(original.lastIndexOf('.')).toLowerCase(Locale.ROOT):"";
-        if(!Set.of(".pdf",".doc",".docx",".txt",".png",".jpg",".jpeg").contains(ext)) throw bad("Allowed files: PDF, DOC, DOCX, TXT, PNG or JPG.");
+        String ext=original.contains(".")?original.substring(original.lastIndexOf('.')+1).toLowerCase(Locale.ROOT):"";
+        byte[] bytes=file.getBytes(); String contentType=verifiedAttachmentType(ext,bytes);
+        if(contentType==null) throw bad("Allowed files are PNG, JPEG and PDF, and the file contents must match the extension.");
         if(original.isBlank() || original.length()>180 || original.chars().anyMatch(Character::isISOControl)) throw bad("The filename is invalid.");
         Files.createDirectories(uploads); String stored=UUID.randomUUID()+"_"+original; Path target=uploads.resolve(stored).normalize(); if(!target.startsWith(uploads)) throw bad("Invalid upload path.");
         file.transferTo(target);
         try {
-            db.update("INSERT INTO assignment_attachments(submission_id,stored_name,original_name,content_type,size_bytes) VALUES(?,?,?,?,?)",submissionId,stored,original,file.getContentType()==null?"application/octet-stream":file.getContentType(),file.getSize());
+            db.update("INSERT INTO assignment_attachments(submission_id,stored_name,original_name,content_type,size_bytes) VALUES(?,?,?,?,?)",submissionId,stored,original,contentType,file.getSize());
         } catch (RuntimeException exception) {
             Files.deleteIfExists(target);
             throw exception;
@@ -269,24 +411,33 @@ public class AssignmentController {
     }
 
     @PostMapping("/submissions/{submissionId}/submit") @Transactional
-    public Map<String,Object> submit(@PathVariable long submissionId,HttpSession session) {
-        Identity me=identity(session,"STUDENT"); Map<String,Object> s=one("SELECT s.assignment_id,s.status,s.attempt_expires_at,a.due_at,a.status assignment_status FROM assignment_submissions s JOIN assignments a ON a.assignment_id=s.assignment_id WHERE s.submission_id=? AND s.student_user_id=?",submissionId,me.id());
-        if(!"DRAFT".equals(s.get("status").toString())) throw bad("This submission is already final.");
+    public Map<String,Object> submit(@PathVariable long submissionId,@RequestBody(required=false) Map<String,Object> input,HttpSession session) {
+        Identity me=identity(session,"STUDENT"); Map<String,Object> s=one("SELECT s.assignment_id,s.status,s.attempt_expires_at,a.due_at,a.status assignment_status FROM assignment_submissions s JOIN assignments a ON a.assignment_id=s.assignment_id WHERE s.submission_id=? AND s.student_user_id=? FOR UPDATE",submissionId,me.id());
+        if(!"DRAFT".equals(s.get("status").toString())) return submissionSummary(submissionId, false);
         if(!"PUBLISHED".equals(s.get("assignment_status").toString())) throw bad("This assignment is no longer open.");
-        db.update("UPDATE assignment_submissions SET status='SUBMITTED',submitted_at=NOW(),evaluation_status='PROCESSING' WHERE submission_id=?",submissionId);
-        try {
-            db.update("INSERT INTO assignment_answers(submission_id,question_id,answer_text) "
-                    + "SELECT ?,q.question_id,'' FROM assignment_questions q "
-                    + "LEFT JOIN assignment_answers aa ON aa.submission_id=? AND aa.question_id=q.question_id "
-                    + "WHERE q.assignment_id=? AND aa.answer_id IS NULL",submissionId,submissionId,s.get("assignment_id"));
-            List<Map<String,Object>> answers=db.queryForList("SELECT aa.answer_id,aa.answer_text,q.question_text,q.question_type,q.model_answer,q.rubric,q.points FROM assignment_answers aa JOIN assignment_questions q ON q.question_id=aa.question_id WHERE aa.submission_id=?",submissionId);
-            for(var ans:answers){
-                Map<String,Object> evaluation=ai.evaluate(ans.get("question_text").toString(),ans.get("question_type").toString(),(BigDecimal)ans.get("points"),Objects.toString(ans.get("model_answer"),""),Objects.toString(ans.get("rubric"),""),Objects.toString(ans.get("answer_text"),""));
-                db.update("UPDATE assignment_answers SET ai_score=?,ai_feedback=? WHERE answer_id=?",evaluation.get("score"),evaluation.get("feedback"),ans.get("answer_id"));
-            }
-            db.update("UPDATE assignment_submissions SET evaluation_status='EVALUATED' WHERE submission_id=?",submissionId);
-        } catch(Exception e) { db.update("UPDATE assignment_submissions SET evaluation_status='FAILED' WHERE submission_id=?",submissionId); }
-        return one("SELECT submission_id,status,evaluation_status,submitted_at FROM assignment_submissions WHERE submission_id=?",submissionId);
+        Object rawAnswers=input==null?null:input.get("answers");
+        if(rawAnswers instanceof List<?> answers) for(Object raw:answers) {
+            if(!(raw instanceof Map<?,?> answer)) throw bad("Invalid answer data.");
+            long questionId; try { questionId=Long.parseLong(Objects.toString(answer.get("questionId"),"")); } catch(NumberFormatException ex) { throw bad("Invalid question identifier."); }
+            String answerText=text(Map.of("answer",Objects.toString(answer.get("answer"),"")),"answer",30000,false);
+            one("SELECT question_id FROM assignment_questions WHERE question_id=? AND assignment_id=?",questionId,s.get("assignment_id"));
+            db.update("INSERT INTO assignment_answers(submission_id,question_id,answer_text) VALUES(?,?,?) ON DUPLICATE KEY UPDATE answer_text=VALUES(answer_text)",submissionId,questionId,answerText);
+        }
+        db.update("INSERT INTO assignment_answers(submission_id,question_id,answer_text) "
+                + "SELECT ?,q.question_id,'' FROM assignment_questions q "
+                + "LEFT JOIN assignment_answers aa ON aa.submission_id=? AND aa.question_id=q.question_id "
+                + "WHERE q.assignment_id=? AND aa.answer_id IS NULL",submissionId,submissionId,s.get("assignment_id"));
+        // A student's submission is accepted immediately. AI evaluation remains available
+        // through the teacher's Evaluate with AI action and must not block this request.
+        db.update("UPDATE assignment_submissions SET status='SUBMITTED',submitted_at=NOW(),evaluation_status='PENDING' WHERE submission_id=?",submissionId);
+        return submissionSummary(submissionId, input!=null && Boolean.TRUE.equals(input.get("automatic")));
+    }
+
+    private Map<String,Object> submissionSummary(long submissionId,boolean automatic) {
+        Map<String,Object> result=one("SELECT s.submission_id,s.status,s.evaluation_status,s.submitted_at,a.max_score total_marks,(SELECT COUNT(*) FROM assignment_questions q WHERE q.assignment_id=s.assignment_id) total_questions,(SELECT COUNT(*) FROM assignment_questions q WHERE q.assignment_id=s.assignment_id AND (EXISTS(SELECT 1 FROM assignment_answers aa WHERE aa.submission_id=s.submission_id AND aa.question_id=q.question_id AND COALESCE(aa.answer_text,'')<> '') OR EXISTS(SELECT 1 FROM assignment_answer_attachments ata JOIN assignment_answers aa ON aa.answer_id=ata.answer_id WHERE aa.submission_id=s.submission_id AND aa.question_id=q.question_id))) attempted_questions,(SELECT COUNT(*) FROM assignment_answer_attachments ata JOIN assignment_answers aa ON aa.answer_id=ata.answer_id WHERE aa.submission_id=s.submission_id) attachment_count FROM assignment_submissions s JOIN assignments a ON a.assignment_id=s.assignment_id WHERE s.submission_id=?",submissionId);
+        result.put("unattempted_questions",((Number)result.get("total_questions")).intValue()-((Number)result.get("attempted_questions")).intValue());
+        result.put("submitted_automatically",automatic);
+        return result;
     }
 
     @GetMapping("/teacher/submissions")
@@ -302,11 +453,50 @@ public class AssignmentController {
         one("SELECT submission_id FROM assignment_submissions WHERE submission_id=? AND assignment_id=? AND status IN ('SUBMITTED','GRADED')",submissionId,assignmentId);
         db.update("UPDATE assignment_submissions SET evaluation_status='PROCESSING' WHERE submission_id=?",submissionId);
         try {
-            List<Map<String,Object>> answers=db.queryForList("SELECT aa.answer_id,aa.answer_text,q.question_text,q.question_type,q.model_answer,q.rubric,q.points FROM assignment_answers aa JOIN assignment_questions q ON q.question_id=aa.question_id WHERE aa.submission_id=?",submissionId);
-            for(var ans:answers){var ev=ai.evaluate(ans.get("question_text").toString(),ans.get("question_type").toString(),(BigDecimal)ans.get("points"),Objects.toString(ans.get("model_answer"),""),Objects.toString(ans.get("rubric"),""),Objects.toString(ans.get("answer_text"),""));db.update("UPDATE assignment_answers SET ai_score=?,ai_feedback=? WHERE answer_id=?",ev.get("score"),ev.get("feedback"),ans.get("answer_id"));}
+            List<Map<String,Object>> answers=db.queryForList("SELECT aa.answer_id,aa.question_id,aa.answer_text,q.question_text,q.question_type,q.model_answer,q.rubric,q.points FROM assignment_answers aa JOIN assignment_questions q ON q.question_id=aa.question_id WHERE aa.submission_id=?",submissionId);
+            for(var ans:answers){
+                List<AssignmentAiService.AttachmentInput> files=db.query("SELECT original_name,content_type,file_data FROM assignment_answer_attachments WHERE answer_id=? ORDER BY uploaded_at",(rs,rowNum)->new AssignmentAiService.AttachmentInput(rs.getString("original_name"),rs.getString("content_type"),rs.getBytes("file_data")),ans.get("answer_id"));
+                var ev=ai.evaluate(ans.get("question_text").toString(),ans.get("question_type").toString(),(BigDecimal)ans.get("points"),Objects.toString(ans.get("model_answer"),""),Objects.toString(ans.get("rubric"),""),Objects.toString(ans.get("answer_text"),""),files);
+                db.update("UPDATE assignment_answers SET ai_score=?,ai_feedback=? WHERE answer_id=?",ev.get("score"),ev.get("feedback"),ans.get("answer_id"));
+            }
             db.update("UPDATE assignment_submissions SET evaluation_status='EVALUATED' WHERE submission_id=?",submissionId);
-        } catch(Exception e) { db.update("UPDATE assignment_submissions SET evaluation_status='FAILED' WHERE submission_id=?",submissionId); throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,"AI evaluation failed. Retry evaluation."); }
+        } catch(DataAccessException e) {
+            log.error("Database access failed while evaluating submission {}. Check MySQL connectivity and DNS.",submissionId,e);
+            markEvaluationFailed(submissionId);
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "The database connection was lost during evaluation. Check the MySQL host/network, then retry or use Manual Evaluation.",e);
+        } catch(RestClientResponseException e) {
+            String providerError=e.getResponseBodyAsString();
+            if(providerError.length()>1500) providerError=providerError.substring(0,1500);
+            log.error("Groq returned HTTP {} while evaluating submission {}: {}",e.getStatusCode().value(),submissionId,providerError);
+            markEvaluationFailed(submissionId);
+            if(e.getStatusCode().value()==429)
+                throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
+                        "AI limit exhausted. Groq's request quota or rate limit has been reached. Check your Groq quota or try again after it resets.",e);
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                    "Groq returned HTTP " + e.getStatusCode().value() + ". Check the backend log, then retry or use Manual Evaluation.",e);
+        } catch(ResourceAccessException e) {
+            log.error("Network access failed while calling Groq for submission {}.",submissionId,e);
+            markEvaluationFailed(submissionId);
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                    "The backend could not reach Groq. Check the backend network, then retry or use Manual Evaluation.",e);
+        } catch(RestClientException e) {
+            log.error("Could not complete the Groq request for submission {}.",submissionId,e);
+            markEvaluationFailed(submissionId);
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                    "The backend could not complete the Groq request. Check the backend log, then retry or use Manual Evaluation.",e);
+        } catch(Exception e) {
+            log.error("Unexpected AI evaluation error for submission {}.",submissionId,e);
+            markEvaluationFailed(submissionId);
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                    "AI evaluation could not complete. Check the backend log, then retry or use Manual Evaluation.",e);
+        }
         return Map.of("evaluationStatus","EVALUATED");
+    }
+
+    private void markEvaluationFailed(long submissionId) {
+        try { db.update("UPDATE assignment_submissions SET evaluation_status='FAILED' WHERE submission_id=?",submissionId); }
+        catch (RuntimeException e) { log.error("Could not record evaluation failure for submission {} because the database is unavailable.",submissionId,e); }
     }
 
     @GetMapping("/{assignmentId}/submissions/{submissionId}/review")
@@ -314,6 +504,7 @@ public class AssignmentController {
         Identity me=identity(session,"TEACHER"); requireTeacherOwns(assignmentId,me.id());
         Map<String,Object> s=one("SELECT s.submission_id,s.score,s.feedback,s.status,s.evaluation_status,u.full_name student,a.title assignment FROM assignment_submissions s JOIN users u ON u.user_id=s.student_user_id JOIN assignments a ON a.assignment_id=s.assignment_id WHERE s.submission_id=? AND s.assignment_id=?",submissionId,assignmentId);
         s.put("answers",db.queryForList("SELECT q.question_id,q.question_text,q.model_answer,q.rubric,q.points,aa.answer_text,aa.ai_score,aa.ai_feedback,aa.final_score,aa.final_feedback FROM assignment_answers aa JOIN assignment_questions q ON q.question_id=aa.question_id WHERE aa.submission_id=? ORDER BY q.position",submissionId));
+        s.put("answerAttachments",db.queryForList("SELECT aa.question_id,ata.attachment_id,ata.original_name,ata.content_type,ata.size_bytes,ata.uploaded_at FROM assignment_answer_attachments ata JOIN assignment_answers aa ON aa.answer_id=ata.answer_id WHERE aa.submission_id=? ORDER BY aa.question_id,ata.uploaded_at",submissionId));
         s.put("attachments",db.queryForList("SELECT attachment_id,original_name,content_type,size_bytes,uploaded_at FROM assignment_attachments WHERE submission_id=?",submissionId));return s;
     }
 
@@ -333,11 +524,20 @@ public class AssignmentController {
     }
 
     private static String text(Map<String,Object> m,String key,int max,boolean required){Object v=m.get(key);String s=v==null?"":v.toString().trim();if((required&&s.isEmpty())||s.length()>max)throw bad("Check the " + key + " field.");return s;}
+    private BigDecimal questionMarks(long assignmentId, Long excludeQuestionId) {
+        BigDecimal total = excludeQuestionId == null
+                ? db.queryForObject("SELECT COALESCE(SUM(points),0) FROM assignment_questions WHERE assignment_id=?", BigDecimal.class, assignmentId)
+                : db.queryForObject("SELECT COALESCE(SUM(points),0) FROM assignment_questions WHERE assignment_id=? AND question_id<>?", BigDecimal.class, assignmentId, excludeQuestionId);
+        return total == null ? BigDecimal.ZERO : total;
+    }
     private long insertAndGetId(String sql, Object... values) {
         KeyHolder keyHolder = new GeneratedKeyHolder();
         db.update(connection -> {
             PreparedStatement statement = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
-            for (int i = 0; i < values.length; i++) statement.setObject(i + 1, values[i]);
+            for (int i = 0; i < values.length; i++) {
+                if (values[i] instanceof byte[] bytes) statement.setBytes(i + 1, bytes);
+                else statement.setObject(i + 1, values[i]);
+            }
             return statement;
         }, keyHolder);
         Number generatedId = keyHolder.getKey();

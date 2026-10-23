@@ -81,14 +81,30 @@
 .evaluation-table td button, .question-form button, .ai-question-panel button { border:0; border-radius:7px; padding:9px 12px; color:white; background:#1768e8; font-weight:700; cursor:pointer; }
 .evaluation-table td button.light, .light { color:#28548f; background:#edf3fb; }
 .evaluation-table td button:disabled { opacity:.65; cursor:wait; }
+.evaluation-actions { display:flex; flex-wrap:wrap; gap:7px; }
+.evaluation-actions button { flex:1 1 112px; min-width:0; }
+.evaluation-actions .manual-evaluation-button { color:#28548f; background:#edf3fb; }
+.evaluation-actions .ai-evaluation-button { color:#fff; background:#1768e8; }
+.evaluation-actions .view-evaluation-button { color:#fff; background:#1768e8; }
 .evaluation-status, .total-pill { display:inline-flex; border-radius:20px; padding:6px 10px; background:#fff3dc; color:#a65b00; font-size:12px; font-weight:700; }
-.status-ai-evaluated, .status-finalized { background:#e2f7eb; color:#168348; }
-.status-ai-failed { background:#fff0f0; color:#b22f3d; }
+.status-ai-evaluated { background:#e2f7eb; color:#168348; }
+.status-manually-evaluated { background:#e8e9ff; color:#4e42b8; }
 .evaluation-dialog { width:min(860px,calc(100% - 28px)); max-height:90vh; overflow:auto; border:0; border-radius:14px; padding:24px; box-shadow:0 20px 70px #10244244; }
 .evaluation-dialog::backdrop { background:#10244280; }
 .dialog-heading { display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; }
 .dialog-heading h2 { margin:6px 0; }
 .evaluation-dialog .review-question { display:grid; gap:9px; border:1px solid #e5eaf1; border-radius:10px; padding:16px; margin:14px 0; }
+.review-question-heading { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+.review-question-heading h3 { margin:0; }
+.review-question-heading span { flex:none; color:#1768e8; font-weight:750; white-space:nowrap; }
+.evaluation-dialog details { border-radius:8px; padding:10px 12px; background:#f5f8fc; }
+.evaluation-dialog summary { cursor:pointer; font-weight:650; }
+.evaluation-dialog .ai-suggestion { border-left:3px solid #6d63da; padding:8px 10px; background:#f4f3ff; }
+.submission-attachments { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0; }
+.submission-attachment { border-radius:8px; padding:7px 10px; background:#edf3fb; color:#28548f; }
+.evaluation-progress { padding:20px 0; }
+.evaluation-progress-bar { width:100%; height:12px; accent-color:#1768e8; }
+.evaluation-error { padding:12px; border-radius:9px; background:#fff0f0; color:#b22f3d; }
 .evaluation-dialog .review-question p { white-space:pre-wrap; overflow-wrap:anywhere; margin:4px 0; color:#53627a; }
 .evaluation-dialog label, .create-panel label, .question-form label, .ai-question-panel label { display:grid; gap:7px; color:#48566d; font-size:13px; font-weight:650; }
 .evaluation-dialog input, .evaluation-dialog textarea, .create-panel input, .create-panel select, .create-panel textarea, .question-form input, .question-form select, .question-form textarea, .ai-question-panel input, .ai-question-panel select { width:100%; padding:11px 12px; border:1px solid #d6deea; border-radius:8px; background:#fff; color:#182538; font:inherit; }
@@ -111,6 +127,16 @@
 .draft-question-list li > div { display:flex; justify-content:space-between; gap:15px; align-items:center; }
 .draft-question-list p { white-space:pre-wrap; color:#58677e; }
 .draft-question-list button.danger { border:0; border-radius:7px; padding:8px 11px; background:#fff0f0; color:#b22f3d; cursor:pointer; }
+.draft-question-list .draft-question-copy { display:block; flex:1; min-width:0; }
+.question-row-actions { display:flex; flex:0 0 auto; gap:7px; }
+.question-row-actions button { border:0; border-radius:7px; padding:8px 11px; cursor:pointer; }
+.question-row-actions .light { background:#edf3ff; color:#2056a5; }
+.question-view-dialog { color:#182538; }
+.question-view-dialog h4 { margin:16px 0 5px; }
+.question-view-copy { white-space:pre-wrap; overflow-wrap:anywhere; color:#53627a; }
+.dialog-heading { display:flex; align-items:center; justify-content:space-between; gap:14px; }
+.dialog-heading h3 { margin:0; }
+.question-view-dialog .assignment-detail-grid { margin:14px 0; }
 .ai-question-panel summary { font-weight:750; cursor:pointer; }
 .ai-question-panel .form-grid { margin-top:17px; align-items:end; }
 .create-footer-actions { justify-content:space-between; }
@@ -132,6 +158,10 @@
 .teacher-assignment-table th:nth-child(5) { width:15%; }
 .view-assignment-button { border:0; border-radius:8px; padding:10px 12px; background:#1768e8; color:#fff; font-weight:700; cursor:pointer; }
 .view-assignment-button:hover { filter:brightness(.95); }
+.assignment-list-actions { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.assignment-list-actions .danger { border:0; border-radius:8px; padding:10px 12px; background:#fff0f0; color:#b22f3d; font-weight:700; cursor:pointer; }
+.assignment-list-actions .danger:hover { background:#ffe2e2; }
+.assignment-list-actions button:disabled { opacity:.6; cursor:wait; }
 .assignment-list-error { color:#b22f3d; overflow-wrap:anywhere; }
 .assignment-view-dialog { width:min(760px,calc(100% - 28px)); max-height:90vh; overflow:auto; border:0; border-radius:14px; padding:24px; box-shadow:0 20px 70px #10244244; }
 .assignment-view-dialog::backdrop { background:#10244280; }
@@ -143,6 +173,14 @@
 .assignment-view-questions { padding-left:22px; }
 .assignment-view-questions li { padding:10px 0; border-bottom:1px solid #edf0f5; }
 .assignment-view-questions p { white-space:pre-wrap; overflow-wrap:anywhere; color:#53627a; }
+.assignment-view-question-row { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:start; gap:20px; }
+.assignment-view-question-row p { margin:0; }
+.assignment-view-question-row strong { white-space:nowrap; text-align:right; }
+.assignment-dialog-actions { display:flex; align-items:center; gap:10px; }
+.assignment-dialog-actions [hidden] { display:none; }
+.assignment-dialog-actions .danger { border:0; border-radius:8px; padding:11px 15px; background:#fff0f0; color:#b22f3d; font-weight:700; cursor:pointer; }
+.assignment-dialog-actions .danger:hover { background:#ffe2e2; }
+.assignment-dialog-actions .danger:disabled { opacity:.6; cursor:wait; }
 .teacher-submissions-content .teacher-assignment-heading { margin-bottom:4px; }
 @media(max-width:800px) { .teacher-assignment-heading,.evaluation-toolbar,.create-step-heading { align-items:flex-start; flex-direction:column; } .create-panel form { grid-template-columns:1fr; } .create-panel .create-description { grid-row:auto; } .form-grid { grid-template-columns:1fr; } }
 /* Keep the teacher workspace inside the viewport; long content grows vertically. */
