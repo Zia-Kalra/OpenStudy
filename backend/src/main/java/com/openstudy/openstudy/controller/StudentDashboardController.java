@@ -21,6 +21,7 @@ public class StudentDashboardController {
     private static final ZoneId APP_ZONE = ZoneId.of("Asia/Kolkata");
     private static final DateTimeFormatter DASHBOARD_DATE = DateTimeFormatter.ofPattern("dd MMM yyyy");
     private final JdbcTemplate db;
+    private static final DateTimeFormatter RESULT_DATE = DateTimeFormatter.ofPattern("dd MMM yyyy");
 
     public StudentDashboardController(JdbcTemplate db) {
         this.db = db;
@@ -101,12 +102,46 @@ public class StudentDashboardController {
     public String results(Model model, HttpSession session) {
         addCurrentUser(model, session);
         model.addAttribute("activePage", "results");
-        model.addAttribute("results", List.of(
-                Map.of("title", "Java Basics Quiz", "type", "Quiz", "score", "80/100", "status", "Passed", "date", "15 Oct 2026"),
-                Map.of("title", "DBMS Concepts Quiz", "type", "Quiz", "score", "50/100", "status", "Pending", "date", "15 Oct 2026"),
-                Map.of("title", "Java Collections Assignment", "type", "Assignment", "score", "92/100", "status", "Passed", "date", "10 Oct 2026"),
-                Map.of("title", "R Programming Quiz", "type", "Quiz", "score", "72/100", "status", "Passed", "date", "08 Oct 2026")));
+        User user = (User) session.getAttribute("loggedInUser");
+        long studentId = user == null || user.getUserId() == null ? -1L : user.getUserId();
+        List<Map<String, Object>> resultRows = db.queryForList("SELECT a.title,a.max_score,s.score,s.status,s.evaluation_status,s.graded_at,s.updated_at, "
+                + "(SELECT SUM(COALESCE(aa.final_score,aa.ai_score,0)) FROM assignment_answers aa WHERE aa.submission_id=s.submission_id) evaluated_score, "
+                + "(SELECT MAX(aa.evaluated_at) FROM assignment_answers aa WHERE aa.submission_id=s.submission_id) answer_evaluated_at "
+                + "FROM assignment_submissions s JOIN assignments a ON a.assignment_id=s.assignment_id "
+                + "WHERE s.student_user_id=? AND s.status IN ('SUBMITTED','GRADED') "
+                + "ORDER BY COALESCE(s.graded_at,s.submitted_at) DESC", studentId);
+        List<Map<String, Object>> results = resultRows.stream().map(row -> {
+            java.math.BigDecimal maxScore = (java.math.BigDecimal) row.get("max_score");
+            java.math.BigDecimal score = (java.math.BigDecimal) row.get("score");
+            java.math.BigDecimal evaluatedScore = (java.math.BigDecimal) row.get("evaluated_score");
+            boolean teacherEvaluated = "GRADED".equalsIgnoreCase(String.valueOf(row.get("status")));
+            boolean aiEvaluated = "EVALUATED".equalsIgnoreCase(String.valueOf(row.get("evaluation_status")));
+            boolean evaluated = (teacherEvaluated || aiEvaluated) && (score != null || evaluatedScore != null);
+            String status = "Pending result";
+            String marks = "Pending result";
+            String date = "—";
+            if (evaluated) {
+                java.math.BigDecimal finalScore = teacherEvaluated && score != null ? score : evaluatedScore != null ? evaluatedScore : score;
+                marks = formatMarks(finalScore) + "/" + formatMarks(maxScore);
+                status = finalScore.multiply(java.math.BigDecimal.valueOf(100))
+                        .compareTo(maxScore.multiply(java.math.BigDecimal.valueOf(40))) > 0 ? "Passed" : "Failed";
+                Object evaluatedAt = teacherEvaluated ? row.get("graded_at") : row.get("answer_evaluated_at");
+                if (evaluatedAt == null) evaluatedAt = row.get("updated_at");
+                if (evaluatedAt instanceof java.sql.Timestamp timestamp)
+                    date = timestamp.toLocalDateTime().format(RESULT_DATE);
+                else if (evaluatedAt instanceof java.time.LocalDateTime dateTime)
+                    date = dateTime.format(RESULT_DATE);
+            }
+            return Map.<String, Object>of("title", String.valueOf(row.get("title")), "type", "Assignment",
+                    "score", marks, "status", status, "date", date);
+        }).toList();
+        // Quiz results can be merged into this shared row format by the quiz module: title, type, score, status, date.
+        model.addAttribute("results", results);
         return "student/results";
+    }
+
+    private String formatMarks(java.math.BigDecimal value) {
+        return value.stripTrailingZeros().toPlainString();
     }
 
     @GetMapping("/student/performance")

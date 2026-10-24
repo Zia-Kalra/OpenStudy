@@ -498,7 +498,7 @@ public class AssignmentController {
             for(var ans:answers){
                 List<AssignmentAiService.AttachmentInput> files=db.query("SELECT original_name,content_type,file_data FROM assignment_answer_attachments WHERE answer_id=? ORDER BY uploaded_at",(rs,rowNum)->new AssignmentAiService.AttachmentInput(rs.getString("original_name"),rs.getString("content_type"),rs.getBytes("file_data")),ans.get("answer_id"));
                 var ev=ai.evaluate(ans.get("question_text").toString(),ans.get("question_type").toString(),(BigDecimal)ans.get("points"),Objects.toString(ans.get("model_answer"),""),Objects.toString(ans.get("rubric"),""),Objects.toString(ans.get("answer_text"),""),files);
-                db.update("UPDATE assignment_answers SET ai_score=?,ai_feedback=? WHERE answer_id=?",ev.get("score"),ev.get("feedback"),ans.get("answer_id"));
+                db.update("UPDATE assignment_answers SET ai_score=?,ai_feedback=?,evaluated_at=NOW() WHERE answer_id=?",ev.get("score"),ev.get("feedback"),ans.get("answer_id"));
             }
             db.update("UPDATE assignment_submissions SET evaluation_status='EVALUATED' WHERE submission_id=?",submissionId);
         } catch(DataAccessException e) {
