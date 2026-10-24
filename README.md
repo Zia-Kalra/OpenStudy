@@ -126,6 +126,15 @@ This repository is being prepared for collaborative development. Features, datab
 
 See the repository's `LICENSE` file for licensing terms.
 
+## Assignment feature
+
+The student assignment workspace is served at `/assignments/`. Teacher assignment review is at `/teacher/assignments`, and creation starts at `/teacher/assignments/create`. Apply the SQL migrations in order through V5 before using timed attempts, per-answer attachments, or teacher-created subjects. V4 also allows teacher-created subjects by making the existing `subjects.student_id` column nullable. V5 stores student answer files in MySQL; the maximum is 10 MB per file, with no attachment-count limit. PNG, JPEG, and PDF are supported.
+
+The feature expects the application's authenticated session to expose either a `User` object under `user`, or `userId` and `role` attributes. It enforces the teacher/student role and assignment ownership/enrollment in the assignment endpoints. The repository currently has no sign-in implementation, so a session must be established by the authentication feature.
+
+Set `GROQ_API_KEY` in the backend environment to enable AI question suggestions and answer evaluation. `GROQ_MODEL` is optional and defaults to `openai/gpt-oss-20b`. The local VS Code launch file is `.vscode/launch.json`; it is ignored by Git and contains a placeholder for your key. The browser never receives the key. Student uploads are stored under `uploads/assignments` (configurable with the `openstudy.upload-dir` JVM system property); retain this directory with the application deployment. Attachment downloads are served through an authenticated endpoint.
+
+
 ## Test your endpoints
 
 Open these in your browser:

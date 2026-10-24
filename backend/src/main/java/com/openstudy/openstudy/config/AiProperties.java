@@ -6,9 +6,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class AiProperties {
 
     /**
-     * mock | gemini
+     * groq | mock
      */
-    private String provider = "mock";
+    private String provider = "groq";
 
     public String getProvider() {
         return provider;

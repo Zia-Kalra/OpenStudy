@@ -119,7 +119,7 @@
             <section class="panel">
                 <div class="panel-header">
                     <h3>Quick Actions</h3>
-                    <p>These shortcuts are integration-ready. They do not create quizzes or assignments yet.</p>
+                    <p>Use these shortcuts to open available tools and modules still being integrated.</p>
                 </div>
                 <div class="actions-grid">
                     <c:forEach var="action" items="${dashboard.quickActions}">

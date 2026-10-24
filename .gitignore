@@ -18,65 +18,10 @@ replay_pid*
 .mtj.tmp/
 
 # ==========================================
-# Java / Maven build output
+# Aiven SSL certificate and Java truststore
 # ==========================================
-**/target/
+backend/certs/*
 
-# ==========================================
-# Java package archives
-# ==========================================
-*.jar
-*.war
-*.nar
-*.ear
-*.zip
-*.tar.gz
-*.rar
-
-# ==========================================
-# Secrets and environment files
-# ==========================================
-.env
-.env.*
-!.env.example
-application-local.properties
-application-local*.properties
-application-local*.yml
-application-local*.yaml
-application-secrets*.properties
-application-secrets*.yml
-application-secrets*.yaml
-
-# Private keys and certificates
-*.pem
-*.key
-*.p12
-*.pfx
-*.pkcs12
-*.keystore
-*.jceks
-*.ppk
-*.p8
-*.pk8
-*.pkcs8
-id_rsa
-id_ecdsa
-id_ed25519
-*.der
-*.crt
-*.cer
-*.jks
-backend/certs/
-
-# ==========================================
-# IDE files
-# ==========================================
-.vscode/
-.idea/
-*.iml
-
-# ==========================================
-# Operating system files
-# ==========================================
-.DS_Store
-Thumbs.db
+# Local VS Code launch settings can contain secrets.
+.vscode/launch.json
+backend/.vscode/launch.json

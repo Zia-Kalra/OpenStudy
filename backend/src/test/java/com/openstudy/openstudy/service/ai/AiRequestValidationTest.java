@@ -1,7 +1,7 @@
 package com.openstudy.openstudy.service.ai;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import com.openstudy.openstudy.config.GeminiProperties;
+import com.openstudy.openstudy.config.GroqProperties;
 import com.openstudy.openstudy.dto.AssignmentEvaluationRequest;
 import com.openstudy.openstudy.dto.MCQGenerationRequest;
 import com.openstudy.openstudy.dto.RubricCriterionDTO;
@@ -77,14 +77,14 @@ class AiRequestValidationTest {
     }
 
     private List<AIService> providers() {
-        var properties = new GeminiProperties();
+        var properties = new GroqProperties();
         properties.setApiKey("test-key");
         var builder = RestClient.builder().baseUrl("https://example.invalid");
         // No expectations: any HTTP request fails, so validation must precede I/O.
         MockRestServiceServer.bindTo(builder).build();
         var validator = new AiResponseValidator();
-        return List.of(new MockAIService(validator), new GeminiAIService(builder.build(), properties,
-                new GeminiJsonParser(new ObjectMapper()), validator));
+        return List.of(new MockAIService(validator), new GroqAIService(builder.build(), properties,
+                new GroqJsonParser(new ObjectMapper()), validator));
     }
 
     @ParameterizedTest
