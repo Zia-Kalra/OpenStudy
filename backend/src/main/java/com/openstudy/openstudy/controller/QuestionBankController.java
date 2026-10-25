@@ -5,6 +5,7 @@ import java.security.Principal;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -24,6 +25,7 @@ import com.openstudy.openstudy.service.QuestionBankService.InvalidQuestionExcept
 import jakarta.validation.Valid;
 
 @RestController
+@Profile("!mock")
 @RequestMapping("/api/teacher/question-bank")
 public class QuestionBankController {
 

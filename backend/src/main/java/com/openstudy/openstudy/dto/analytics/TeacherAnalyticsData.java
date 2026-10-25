@@ -4,7 +4,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
 
-/** Read-only normalized data boundary for future MySQL adapters; no schema assumptions. */
+/** Read-only normalized data shared by the JDBC and explicit demo adapters. */
 public final class TeacherAnalyticsData {
     private TeacherAnalyticsData() { }
 
@@ -22,10 +22,16 @@ public final class TeacherAnalyticsData {
         public String getRollNumber() { return rollNumber; }
         public String getName() { return name; }
         public String getClassId() { return classId; }
+        public String getClassDisplay() { return classId.isBlank() ? "Not linked" : classId; }
     }
     public record Assessment(String id, String title, String classId, String subjectId, String type,
-                             LocalDate date, double maximumScore) {
+                             LocalDate date, double maximumScore, Set<String> eligibleStudentIds) {
+        public Assessment(String id, String title, String classId, String subjectId, String type,
+                LocalDate date, double maximumScore) {
+            this(id, title, classId, subjectId, type, date, maximumScore, null);
+        }
         public Assessment {
+            if (eligibleStudentIds != null) { eligibleStudentIds = Set.copyOf(eligibleStudentIds); }
             if (!Set.of("QUIZ", "ASSIGNMENT").contains(type) || date == null
                     || !Double.isFinite(maximumScore) || maximumScore <= 0) {
                 throw new IllegalArgumentException("Invalid assessment data.");
@@ -51,7 +57,12 @@ public final class TeacherAnalyticsData {
         }
     }
     public record Snapshot(List<Cohort> classes, List<Subject> subjects, List<Student> students,
-                           List<Assessment> assessments, List<Result> results, List<Question> questions, boolean demo) {
+                           List<Assessment> assessments, List<Result> results, List<Question> questions, boolean demo,
+                           List<String> notices) {
+        public Snapshot(List<Cohort> classes, List<Subject> subjects, List<Student> students,
+                List<Assessment> assessments, List<Result> results, List<Question> questions, boolean demo) {
+            this(classes, subjects, students, assessments, results, questions, demo, List.of());
+        }
         public Snapshot {
             classes = List.copyOf(classes);
             subjects = List.copyOf(subjects);
@@ -59,6 +70,7 @@ public final class TeacherAnalyticsData {
             assessments = List.copyOf(assessments);
             results = List.copyOf(results);
             questions = List.copyOf(questions);
+            notices = List.copyOf(notices);
         }
     }
 }

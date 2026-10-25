@@ -3,12 +3,16 @@ package com.openstudy.openstudy.error;
 import com.openstudy.openstudy.service.ai.AiServiceException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import java.sql.SQLException;
+import java.util.StringJoiner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.BeanInstantiationException;
 import org.springframework.core.annotation.Order;
 import org.springframework.dao.DataAccessException;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.CannotGetJdbcConnectionException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -32,6 +36,15 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ResponseStatusException.class)
     public Object handleStatus(ResponseStatusException ex, HttpServletRequest request, HttpServletResponse response) {
         return render(ErrorPages.from(ex, ex.getStatusCode().value()), request, response, ex);
+    }
+
+    @ExceptionHandler(BeanInstantiationException.class)
+    public Object handleConstructorFailure(BeanInstantiationException ex, HttpServletRequest request,
+            HttpServletResponse response) {
+        if (ex.getCause() instanceof ResponseStatusException statusException) {
+            return handleStatus(statusException, request, response);
+        }
+        return render(ErrorPages.ofStatus(500), request, response, ex);
     }
 
     @ExceptionHandler(AiServiceException.class)
@@ -76,6 +89,9 @@ public class GlobalExceptionHandler {
         if (content.status() >= 500) {
             log.error("Request failed status={} code={} ref={} path={}", content.status(), content.code(), referenceId,
                     request.getRequestURI());
+            if (ex instanceof CannotGetJdbcConnectionException) {
+                log.error("JDBC connection failure ref={} causes={}", referenceId, databaseFailureDetails(ex));
+            }
             log.debug("Technical failure ref={}", referenceId, ex);
         } else {
             log.warn("Request failed status={} code={} ref={} path={}", content.status(), content.code(), referenceId,
@@ -90,6 +106,23 @@ public class GlobalExceptionHandler {
                     .body(ApiErrorResponse.of(content, referenceId));
         }
         return views.page(content, referenceId, request.getRequestURI());
+    }
+
+    static String databaseFailureDetails(Throwable failure) {
+        StringJoiner details = new StringJoiner(" -> ");
+        // Never include exception messages or DataSource properties: they may contain secrets.
+        for (int depth = 0; failure != null && depth < 16; depth++, failure = failure.getCause()) {
+            String detail = failure.getClass().getSimpleName();
+            if (failure instanceof SQLException sql) {
+                String state = sql.getSQLState();
+                if (state == null || !state.matches("[A-Z0-9]{5}")) {
+                    state = "unknown";
+                }
+                detail += "[SQLState=" + state + ", errorCode=" + sql.getErrorCode() + "]";
+            }
+            details.add(detail);
+        }
+        return details.toString();
     }
 
     static void applyHeaders(HttpServletResponse response) {

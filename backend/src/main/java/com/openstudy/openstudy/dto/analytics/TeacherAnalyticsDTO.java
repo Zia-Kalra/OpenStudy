@@ -8,11 +8,19 @@ import java.util.Locale;
 public record TeacherAnalyticsDTO(List<Cohort> classes, List<Subject> subjects, TeacherAnalyticsQuery query,
         Overview overview, List<StudentRow> students, StudentDetail selectedStudent,
         List<AssessmentRow> assessments, List<SubjectScore> subjectComparison, List<QuestionRow> questions,
-        List<RReport> reports, RReport selectedReport, boolean demo) {
+        List<RReport> reports, RReport selectedReport, boolean demo, List<String> notices,
+        DescriptiveStatistics statistics) {
+    public TeacherAnalyticsDTO(List<Cohort> classes, List<Subject> subjects, TeacherAnalyticsQuery query,
+            Overview overview, List<StudentRow> students, StudentDetail selectedStudent,
+            List<AssessmentRow> assessments, List<SubjectScore> subjectComparison, List<QuestionRow> questions,
+            List<RReport> reports, RReport selectedReport, boolean demo) {
+        this(classes, subjects, query, overview, students, selectedStudent, assessments, subjectComparison,
+                questions, reports, selectedReport, demo, List.of(), new DescriptiveStatistics(0, null, null, null, null, null));
+    }
     public TeacherAnalyticsDTO {
         classes = List.copyOf(classes); subjects = List.copyOf(subjects); students = List.copyOf(students);
         assessments = List.copyOf(assessments); subjectComparison = List.copyOf(subjectComparison);
-        questions = List.copyOf(questions); reports = List.copyOf(reports);
+        questions = List.copyOf(questions); reports = List.copyOf(reports); notices = List.copyOf(notices);
     }
     public List<Cohort> getClasses() { return classes; }
     public List<Subject> getSubjects() { return subjects; }
@@ -26,11 +34,13 @@ public record TeacherAnalyticsDTO(List<Cohort> classes, List<Subject> subjects, 
     public List<RReport> getReports() { return reports; }
     public RReport getSelectedReport() { return selectedReport; }
     public boolean isDemo() { return demo; }
+    public List<String> getNotices() { return notices; }
+    public DescriptiveStatistics getStatistics() { return statistics; }
 
     public static String percent(Double value) { return value == null ? "—" : String.format(Locale.ROOT, "%.1f%%", value); }
 
     public record Overview(int totalStudents, int gradedCount, Double average, Double highest, Double lowest,
-            Double quizAverage, Double assignmentAverage, double submissionRate, List<Trend> trends, List<Band> distribution) {
+            Double quizAverage, Double assignmentAverage, Double submissionRate, List<Trend> trends, List<Band> distribution) {
         public Overview { trends = List.copyOf(trends); distribution = List.copyOf(distribution); }
         public int getTotalStudents() { return totalStudents; }
         public int getGradedCount() { return gradedCount; }
@@ -103,6 +113,7 @@ public record TeacherAnalyticsDTO(List<Cohort> classes, List<Subject> subjects, 
         public String getId() { return id; }
         public String getTitle() { return title; }
         public String getClassId() { return classId; }
+        public String getClassDisplay() { return classId.isBlank() ? "Not linked" : classId; }
         public String getSubject() { return subject; }
         public String getType() { return type; }
         public String getDate() { return date; }
@@ -110,7 +121,7 @@ public record TeacherAnalyticsDTO(List<Cohort> classes, List<Subject> subjects, 
         public int getSubmitted() { return submitted; }
         public int getGraded() { return graded; }
         public String getAverageDisplay() { return percent(average); }
-        public String getSubmissionDisplay() { return percent(submissionRate); }
+        public String getSubmissionDisplay() { return expected == 0 ? "\u2014" : percent(submissionRate); }
         public double getSubmissionRate() { return submissionRate; }
     }
     public record QuestionRow(String assessment, String label, String difficulty, int answered, int correct, double correctRate) {
@@ -125,6 +136,17 @@ public record TeacherAnalyticsDTO(List<Cohort> classes, List<Subject> subjects, 
     public record RMetric(String label, String value) {
         public String getLabel() { return label; }
         public String getValue() { return value; }
+    }
+    /** Descriptive summary of real normalized grades; not an R-engine or saved-report output. */
+    public record DescriptiveStatistics(int count, Double mean, Double median, Double standardDeviation,
+            Double lowerQuartile, Double upperQuartile) {
+        public int getCount() { return count; }
+        public String getMeanDisplay() { return percent(mean); }
+        public String getMedianDisplay() { return percent(median); }
+        public String getDeviationDisplay() {
+            return standardDeviation == null ? "\u2014" : String.format(Locale.ROOT, "%.2f pp", standardDeviation);
+        }
+        public String getQuartileDisplay() { return percent(lowerQuartile) + " / " + percent(upperQuartile); }
     }
     /** Stored report output supplied by R; Java does not recompute statistical tests. */
     public record RReport(String id, String title, String method, String methodLabel, java.util.Set<String> classIds,

@@ -1,12 +1,14 @@
 package com.openstudy.openstudy.config;
 
 import java.time.Duration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
 @Configuration
+@ConditionalOnProperty(name = "openstudy.ai.provider", havingValue = "gemini")
 public class GeminiRestClientConfig {
 
     @Bean

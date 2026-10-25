@@ -1,5 +1,8 @@
 # Gemini API integration — local setup
 
+Legacy opt-in integration. Normal startup now uses Groq; see
+[current Groq configuration](groq-configuration.md).
+
 OpenStudy calls Google's official `models.generateContent` REST endpoint from the
 backend. `GeminiAIService` implements the existing `AIService` contract for MCQs and
 assignment evaluation; its request/response validators and teacher-review rules are

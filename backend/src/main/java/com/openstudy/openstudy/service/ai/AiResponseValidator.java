@@ -16,6 +16,7 @@ import org.springframework.util.StringUtils;
 public class AiResponseValidator {
 
     public static final String SOURCE_GEMINI = "GEMINI";
+    public static final String SOURCE_GROQ = "GROQ";
     public static final String SOURCE_MOCK = "MOCK_PLACEHOLDER";
     public static final String STATUS_SUGGESTION = "SUGGESTION_ONLY";
     public static final String STATUS_SCORE_ADJUSTED = "SUGGESTION_SCORE_ADJUSTED";

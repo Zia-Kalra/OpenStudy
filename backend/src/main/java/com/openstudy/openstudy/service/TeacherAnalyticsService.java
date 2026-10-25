@@ -49,6 +49,10 @@ public class TeacherAnalyticsService {
         var subjects = source.subjects().stream().filter(s -> scope.subjectIds().contains(s.id())).toList();
         Set<String> classIds = classes.stream().map(Cohort::id)
                 .filter(id -> "all".equals(query.classId()) || id.equals(query.classId())).collect(Collectors.toSet());
+        if (!source.demo() && classes.isEmpty() && scope.classIds().isEmpty()) {
+            // An empty class ID means subject-only scope, never an invented class record.
+            classIds.add("");
+        }
         Set<String> subjectIds = subjects.stream().map(Subject::id)
                 .filter(id -> "all".equals(query.subjectId()) || id.equals(query.subjectId())).collect(Collectors.toSet());
         var students = source.students().stream().filter(s -> classIds.contains(s.classId())
@@ -61,15 +65,14 @@ public class TeacherAnalyticsService {
         Map<Key, Result> results = source.results().stream().filter(r -> {
             var student = studentMap.get(r.studentId());
             var assessment = assessmentMap.get(r.assessmentId());
-            return student != null && assessment != null && student.classId().equals(assessment.classId())
-                    && student.subjectIds().contains(assessment.subjectId());
+            return student != null && assessment != null && eligible(student, assessment);
         }).collect(Collectors.toMap(r -> new Key(r.studentId(), r.assessmentId()), r -> r));
         results.values().forEach(r -> {
             if (r.score() != null && r.score() > assessmentMap.get(r.assessmentId()).maximumScore()) {
                 throw new IllegalStateException("Analytics adapter returned a score above the assessment maximum.");
             }
         });
-        var context = new Context(assessments, assessmentMap, results, subjects);
+        var context = new Context(assessments, assessmentMap, results, subjects, studentMap);
         var roster = students.stream().map(s -> row(s, context)).toList();
         String search = query.search().toLowerCase(Locale.ROOT);
         Comparator<StudentRow> comparator = switch (query.sort()) {
@@ -82,7 +85,7 @@ public class TeacherAnalyticsService {
                 && ("ALL".equals(query.band()) || query.band().equals(r.band())))
                 .sorted(comparator.thenComparing(r -> r.student().id())).toList();
         StudentRow selected = studentId == null ? (filtered.isEmpty() ? null : filtered.getFirst())
-                : roster.stream().filter(r -> studentId.equals(r.student().id())).findFirst()
+                : filtered.stream().filter(r -> studentId.equals(r.student().id())).findFirst()
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Student not found in this scope."));
         var detail = selected == null ? null : detail(selected, context);
         var graded = results.values().stream().filter(r -> r.score() != null).map(r -> normalized(r, context)).toList();
@@ -91,13 +94,14 @@ public class TeacherAnalyticsService {
         var overview = new Overview(roster.size(), graded.size(), average(graded.stream()),
                 graded.stream().max(Double::compareTo).orElse(null), graded.stream().min(Double::compareTo).orElse(null),
                 average(scores(context, null, null, "QUIZ")), average(scores(context, null, null, "ASSIGNMENT")),
-                rate(submitted, expected), trends(context, null), distribution(roster));
+                expected == 0 ? null : rate(submitted, expected), trends(context, null), distribution(roster));
         var assessmentRows = assessments.stream().sorted(Comparator.comparing(Assessment::date).reversed().thenComparing(Assessment::id))
                 .map(a -> assessmentRow(a, students, context)).toList();
         var comparison = subjectScores(context, null);
         var questions = source.questions().stream().filter(q -> assessmentMap.containsKey(q.assessmentId())
                 && "QUIZ".equals(assessmentMap.get(q.assessmentId()).type()))
-                .map(q -> new QuestionRow(assessmentMap.get(q.assessmentId()).title() + " · " + assessmentMap.get(q.assessmentId()).classId(),
+                .map(q -> new QuestionRow(assessmentMap.get(q.assessmentId()).title()
+                        + (assessmentMap.get(q.assessmentId()).classId().isBlank() ? "" : " · " + assessmentMap.get(q.assessmentId()).classId()),
                         q.label(), q.difficulty(), q.answered(), q.correct(), rate(q.correct(), q.answered()))).toList();
         var reports = rProvider.savedReports(scope, query).stream().filter(r -> !r.classIds().isEmpty() && !r.subjectIds().isEmpty()
                 && classIds.containsAll(r.classIds()) && subjectIds.containsAll(r.subjectIds())
@@ -107,11 +111,11 @@ public class TeacherAnalyticsService {
                 : reports.stream().filter(r -> reportId.equals(r.id())).findFirst()
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Report not found in this scope."));
         return new TeacherAnalyticsDTO(classes, subjects, query, overview, filtered, detail,
-                assessmentRows, comparison, questions, reports, selectedReport, source.demo());
+                assessmentRows, comparison, questions, reports, selectedReport, source.demo(), source.notices(), statistics(graded));
     }
 
     private StudentRow row(Student student, Context context) {
-        var applicable = context.assessments().stream().filter(a -> a.classId().equals(student.classId()) && student.subjectIds().contains(a.subjectId())).toList();
+        var applicable = context.assessments().stream().filter(a -> eligible(student, a)).toList();
         int submitted = 0;
         int graded = 0;
         for (var assessment : applicable) {
@@ -134,8 +138,8 @@ public class TeacherAnalyticsService {
     }
 
     private StudentDetail detail(StudentRow row, Context context) {
-        var history = context.assessments().stream().filter(a -> a.classId().equals(row.student().classId())
-                && row.student().subjectIds().contains(a.subjectId())).sorted(Comparator.comparing(Assessment::date).reversed())
+        var history = context.assessments().stream().filter(a -> eligible(row.student(), a))
+                .sorted(Comparator.comparing(Assessment::date).reversed())
                 .map(a -> {
                     var result = context.results().get(new Key(row.student().id(), a.id()));
                     return new History(a.title(), subjectLabel(context, a.subjectId()), a.type(), a.date().format(DATE),
@@ -148,7 +152,7 @@ public class TeacherAnalyticsService {
     }
 
     private AssessmentRow assessmentRow(Assessment a, List<Student> students, Context context) {
-        int expected = (int) students.stream().filter(s -> s.classId().equals(a.classId()) && s.subjectIds().contains(a.subjectId())).count();
+        int expected = (int) students.stream().filter(s -> eligible(s, a)).count();
         var results = context.results().values().stream().filter(r -> r.assessmentId().equals(a.id())).toList();
         int submitted = (int) results.stream().filter(r -> !"MISSING".equals(r.status())).count();
         int graded = (int) results.stream().filter(r -> r.score() != null).count();
@@ -158,15 +162,17 @@ public class TeacherAnalyticsService {
     }
 
     private List<SubjectScore> subjectScores(Context context, String studentId) {
-        return context.subjects().stream().filter(s -> context.assessments().stream().anyMatch(a -> a.subjectId().equals(s.id())))
+        return context.subjects().stream().filter(s -> context.assessments().stream().anyMatch(a -> a.subjectId().equals(s.id())
+                        && (studentId == null || eligible(context.students().get(studentId), a))))
                 .map(s -> new SubjectScore(s.label(), average(scores(context, studentId, s.id(), "QUIZ")),
                         average(scores(context, studentId, s.id(), "ASSIGNMENT")), average(scores(context, studentId, s.id(), null)),
                         (int) scores(context, studentId, s.id(), null).count())).toList();
     }
 
     private List<Trend> trends(Context context, String studentId) {
-        return context.assessments().stream().map(a -> a.date().with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)))
-                .distinct().sorted().map(week -> new Trend(week.format(DateTimeFormatter.ofPattern("dd MMM", Locale.ENGLISH)),
+        return context.assessments().stream().filter(a -> studentId == null || eligible(context.students().get(studentId), a))
+                .map(a -> a.date().with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)))
+                .distinct().sorted().map(week -> new Trend(week.format(DateTimeFormatter.ofPattern("dd MMM yyyy", Locale.ENGLISH)),
                         average(weeklyScores(context, studentId, "QUIZ", week)), average(weeklyScores(context, studentId, "ASSIGNMENT", week)))).toList();
     }
 
@@ -199,9 +205,30 @@ public class TeacherAnalyticsService {
         var average = scores.mapToDouble(Double::doubleValue).average();
         return average.isPresent() ? average.getAsDouble() : null;
     }
+    private static boolean eligible(Student student, Assessment assessment) {
+        return student != null && student.classId().equals(assessment.classId())
+                && student.subjectIds().contains(assessment.subjectId())
+                && (assessment.eligibleStudentIds() == null || assessment.eligibleStudentIds().contains(student.id()));
+    }
+    private DescriptiveStatistics statistics(List<Double> values) {
+        var sorted = values.stream().sorted().toList();
+        if (sorted.isEmpty()) { return new DescriptiveStatistics(0, null, null, null, null, null); }
+        double mean = average(sorted.stream());
+        Double deviation = sorted.size() < 2 ? null : Math.sqrt(sorted.stream()
+                .mapToDouble(value -> (value - mean) * (value - mean)).sum() / (sorted.size() - 1));
+        return new DescriptiveStatistics(sorted.size(), mean, quantile(sorted, 0.5), deviation,
+                quantile(sorted, 0.25), quantile(sorted, 0.75));
+    }
+    private double quantile(List<Double> sorted, double fraction) {
+        double position = (sorted.size() - 1) * fraction;
+        int lower = (int) Math.floor(position);
+        int upper = Math.min(lower + 1, sorted.size() - 1);
+        return sorted.get(lower) + (sorted.get(upper) - sorted.get(lower)) * (position - lower);
+    }
     private double normalized(Result r, Context c) { return r.score() / c.assessmentMap().get(r.assessmentId()).maximumScore() * 100; }
     private double rate(int count, int total) { return total == 0 ? 0 : count * 100.0 / total; }
     private String subjectLabel(Context c, String id) { return c.subjects().stream().filter(s -> s.id().equals(id)).map(Subject::label).findFirst().orElse(id); }
     private record Key(String studentId, String assessmentId) { }
-    private record Context(List<Assessment> assessments, Map<String, Assessment> assessmentMap, Map<Key, Result> results, List<Subject> subjects) { }
+    private record Context(List<Assessment> assessments, Map<String, Assessment> assessmentMap, Map<Key, Result> results,
+            List<Subject> subjects, Map<String, Student> students) { }
 }

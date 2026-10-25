@@ -1,177 +1,111 @@
-# Teacher Analytics — Member 5
+# Teacher Analytics with Aiven data
 
-Teacher Analytics is separate from Nitya's Student Analytics. It monitors assigned
-classes, students, assessments, and saved reports. No student routes, student services,
-R scripts, or database files are replaced by this module.
+Normal startup uses the existing Aiven DataSource and `openstudy.teacher-analytics.provider=jdbc`.
+Login, shared database settings, dashboards and student modules are unchanged.
+For the current AI provider configuration, see [Groq configuration](groq-configuration.md).
+The explicit `mock` profile retains its original demo providers for database-independent development.
 
-## Local demo
+## Pages
 
-From the repository root:
-
-```powershell
-.\backend\mvnw.cmd -f backend\pom.xml spring-boot:run "-Dspring-boot.run.profiles=mock"
-```
-
-Open `http://localhost:8080/teacher/analytics`. The sidebar and dashboard quick action
-now lead to this teacher route. Fixtures cover two assigned classes, 20 students,
-two subjects, 16 assessments, and four weeks. They require neither MySQL nor R.
-
-## Routes
-
-All routes are GET pages under `/teacher/analytics`:
-
-| Route | View |
+| Route | Data |
 | --- | --- |
-| `/teacher/analytics` | Class overview and aggregate charts |
-| `/teacher/analytics/students` | Searchable, sortable performance table |
-| `/teacher/analytics/students/{studentId}` | Authorized student drill-down |
-| `/teacher/analytics/assessments` | Assessment/subject comparisons and question difficulty |
-| `/teacher/analytics/reports` | Method-filtered saved report workspace |
-| `/teacher/analytics/reports/{reportId}` | Authorized saved report preview |
+| `/teacher/analytics` | Authorized enrolled roster, normalized grade aggregates, weekly trends and distribution |
+| `/teacher/analytics/students` | Search, performance bands, sorting, subject filters and student drill-down |
+| `/teacher/analytics/assessments` | Published/closed assignments and available quizzes, submission rates and graded question responses |
+| `/teacher/analytics/reports` | Live descriptive summary; honest empty states for unavailable R outputs |
 
-Optional query parameters: `classId`, `subjectId`, `search` (100 characters), `band`,
-`sort`, and `method`. Student search and performance bands narrow the table, not the
-class overview denominator. IDs and filter choices are bounded/validated. Teacher IDs
-and authorization scopes are never accepted from HTTP input. Responses use `no-store`.
+All routes use the existing teacher login session. Restart your normal backend to load these changes,
+then open `/teacher/analytics`. No new login or public data endpoint is introduced.
 
-## Architecture and authorization
+## Verified database mapping
 
-`TeacherAnalyticsController → TeacherAnalyticsService → TeacherAnalyticsDataProvider`
-preserves the established controller/service/provider design. `TeacherIdentityDTO`
-and the existing teacher navigation/layout are reused. Analytics data and view DTOs
-live in `dto.analytics`; providers live in `provider.analytics`.
+The shared schema was inspected through read-only information_schema queries.
 
-`TeacherAnalyticsAccessProvider.resolve(Principal)` is the authentication integration
-boundary. It returns an immutable `TeacherAnalyticsScope` containing a verified
-teacher identity and server-derived class and subject assignments.
+- `users.user_id` supplies the existing authenticated identity. The analytics adapter rechecks
+  `role=TEACHER` and `account_status=ACTIVE` before loading any subject assignments.
+- `subject_teachers` supplies the authorized subjects. Every analytics query binds the verified
+  teacher ID; request parameters can only narrow that scope.
+- `subject_enrollments` with `enrollment_status=ENROLLED`, joined to active student users, supplies
+  the roster. Legacy `subjects.student_id` points to a separate `students` table and is deliberately
+  not guessed to be a `users.user_id` relationship.
+- The inspected schema has **no class/cohort table or student-to-class relationship**. Class filters
+  are disabled and the UI explains that results cover assigned subjects. Internal empty class IDs
+  do not create or represent database classes.
+- `assignments.max_score` supplies assignment maxima. Draft assessments and draft submissions
+  are excluded. Returned/submitted work remains ungraded until a valid final `GRADED` score exists.
+- Quiz maxima sum canonical `question_bank_questions.points` through the actual
+  `quiz_questions.bank_question_id` relationship. Future unavailable quizzes are excluded.
+- Retakes use the latest **submitted or graded** attempt by attempt number, then attempt ID.
+  In-progress/abandoned attempts never replace a completed attempt.
+- Question difficulty comes from the canonical bank. Correct-response counts use valid final
+  awarded points from that same selected graded attempt, and require the answer's question to
+  belong to the attempt's quiz. Ungraded answers are not counted as incorrect responses.
+- No R engine, R script implementation, or R-report table is present. No R report or inferential
+  result is synthesized. Unsupported R method/report controls are hidden on real data.
 
-- Local demonstration access is opt-in through `openstudy.teacher-analytics.demo-access=true`.
-  The default application properties enable it so Teacher Analytics works with Aiven on
-  the default profile and with the database-free `mock` profile. Anonymous access is
-  limited to the labeled demo teacher. Any other principal is rejected. This is not
-  production login. The mock access bean is disabled on `prod`/`production` profiles.
-- Without that flag, and whenever a real adapter is missing on production, the
-  conditional fallback fails closed with HTTP 503 before data is loaded. Member 1 can
-  supply a `TeacherAnalyticsAccessProvider` bean without modifying the controller. The
-  adapter must verify login and TEACHER role and resolve assignments from trusted
-  server-side identity; a principal name alone is insufficient.
-- Unauthorized class/subject filters return 403. Student/report IDs outside the
-  selected authorized scope return 404. Aggregates, feedback, question results, and
-  reports are constrained by the same scope. Cross-class/subject reports require
-  authorization to every included class and subject.
-- The service intersects all adapter rows with the trusted scope as defense in depth.
-  This does not replace authorization inside future database and R adapters.
-- Demo records cannot be returned for a non-demo identity. A real-data adapter must
-  return `demo=false` and use the authenticated access adapter.
+## Calculations and empty states
 
-## MySQL integration boundary
+Scores are normalized as `score / maximum * 100`. Each valid final assessment result has equal
+weight. Missing and ungraded work never becomes a zero grade. Averages, highest/lowest results,
+quiz/assignment comparisons, student bands and weekly charts are calculated from the selected scope.
+Dates use the database calendar dates; chart labels include the year.
 
-Implement `TeacherAnalyticsDataProvider.load(scope)` and select it with
-`openstudy.teacher-analytics.provider`. The default provider is `mock`.
+Submission rates divide submitted/graded eligible work by expected work. With no eligible roster,
+the rate is unavailable (an em dash), rather than a misleading 0%. Students enrolled after a closed
+assessment deadline are excluded from its expected count unless an actual submission exists.
+Current withdrawn/completed enrollments are excluded; this is a current-roster view, not a historical
+roster reconstruction. Published assessments with no positive maximum are omitted with a notice.
+Invalid/missing final scores are excluded with a notice; they cannot corrupt chart percentages.
 
-Return immutable normalized `TeacherAnalyticsData.Snapshot` rows. Each assessment
-identifies its class, subject, type, maximum score, and date; each result references
-a student and assessment and has a `GRADED`, `SUBMITTED`, or `MISSING` status.
-Only graded results carry a numeric score. Scores must lie within the assessment
-maximum. Unknown/no submitted rows are counted as missing expected work.
+Student search/bands/sort narrow the student table. They do not change the class/subject overview
+denominator. Subject filters update assessments and all corresponding aggregates/charts. Direct
+student links must also satisfy the selected filters. Unassigned subjects/classes return 403;
+out-of-scope student/report IDs return 404. No teacher ID is accepted from the browser.
 
-Database adapters must use parameterized queries and join trusted teacher assignments
-and active student enrollments before loading results. The existing database defines
-subject-teacher/enrollment relationships; the demo cohort IDs are not new database
-tables. Agree cohort mapping and enrollment eligibility with the database owner before
-writing the JDBC adapter. Do not add schema or migrations for the UI identifiers.
-Question-response counts must be scoped by the same assignments, not global counts.
-Production pagination and term/date selection should be added at this boundary when
-the live data volume and eligibility rules are agreed.
+Advanced R Analytics includes an explicitly application-calculated descriptive summary of real
+normalized grades: count, mean, median, sample standard deviation (n-1), and linearly interpolated
+quartiles. It is not labeled as an R output or saved report. Empty data stays empty; standard deviation
+requires at least two grades. t-tests, ANOVA and regression stay unavailable until an actual R
+integration exists.
 
-## Metric definitions
+The schema stores no historical assessment-maximum snapshot. Percentages therefore use the current
+stored assignment/bank maximum; historical changes to those values cannot be reconstructed here.
 
-- Every graded score is normalized as `score / assessment maximum × 100`.
-- Class/type/subject means use equally weighted graded results. Highest/lowest are
-  individual normalized assessment results, not student averages.
-- Student averages use that student's applicable graded assessments.
-- Submission rates count submitted or graded work divided by expected eligible work.
-  Missing and submitted-but-ungraded work are not converted into zero grades.
-- Distribution bands count students by their graded average, with a separate not-graded
-  band. Search filters do not change these class totals.
-- Weekly bars group by assessment date, starting Monday. Real adapters must map dates
-  to the school's agreed timezone. Quiz questions use adapter-supplied correct/answered
-  counts; author-assigned difficulty is displayed independently.
+## Live observations and validation
 
-## R integration boundary
+Read-only recheck on 22 October 2026 confirmed the reported missing-data cause:
+**Athul Mohan is active teacher user ID 10, with zero `subject_teachers` rows**.
+Subjects 1 (Maths) and 2 (java) are both assigned to teacher user ID 3. There are
+zero rows in `subject_enrollments`. The two existing submissions reference student
+user ID 2 and subjects 1/2, but do not supply the missing enrollment relationships.
+Login stores `users.user_id` in `loggedInUser`; analytics uses that exact ID.
+The joins and filters match the schema. Removing these filters or inferring access
+from another teacher's records would violate authorization, so no such change was
+made. Legitimate subject assignments and enrollments require team confirmation
+and an approved change through the owning workflow; no records were inserted.
 
-`TeacherRAnalyticsProvider.savedReports(scope, query)` returns immutable stored report
-outputs. Select a future adapter with `openstudy.teacher-analytics.r-provider`.
-Report metadata must identify every included class and subject and whether it is demo
-data. Reports include metrics, interpretation text, and chart data.
+The analytics header now shows the verified teacher name and user ID, and empty
+states distinguish missing subject assignments from missing enrollments. Class
+dropdowns/columns are hidden when no class mapping exists. Subject filters appear
+only when they offer a meaningful choice; student controls appear when a roster
+exists and include a scoped reset link. The real R tab always shows the available
+descriptive panel, without the unsupported method selector, report search or
+illustrative method cards. Existing tab layout and styles are retained.
 
-The mock provider returns **precomputed illustrative fixtures**, not statistics derived
-from dashboard records. Java performs only basic dashboard aggregations; it does not
-calculate standard deviation, t-tests, ANOVA, regression, or p-values and never launches
-R processes. A future adapter should reuse the team's existing R engine/report store,
-preserving pairing, sample size, missing-data policy, assumptions and diagnostics.
-Never construct shell commands or file paths from request parameters. Scope and
-authorization must also be enforced by the R/report-store integration itself.
+Read-only inspection found two subjects, two subject-teacher assignments, four assignments,
+two submissions, and **zero student enrollments or quizzes**. Three published/closed assignments
+are visible to the assigned teacher. Unlinked submissions are not used to invent an enrolled roster.
+Teachers with no assigned subjects receive an empty workspace.
 
-No report-generation POST endpoint or persistence is introduced in the demo. Production
-login, MySQL mapping, R execution, and saved-report storage remain integration work.
+Compilation and read-only provider previews were used for this change. No Maven test phase and
+no new test files are part of this work. No INSERT, UPDATE, DELETE, schema change, migration, or
+sample-data script has been executed. Real enrollment links and quiz data are still needed before
+those statistics can populate. Any proposed sample inserts require a separate review and approval.
 
-## Checks
-
-```powershell
-.\backend\mvnw.cmd -f backend\pom.xml test
-node --test backend\src\test\javascript\teacher-dashboard.test.cjs
-```
-
-Teacher tests cover mock fixtures, normalized scores, missing/ungraded work, filtering,
-authorization denial, adapter-scope defense, fail-closed production access, immutable
-contracts, and all six JSP routes on embedded Tomcat. JSP tests also check XSS escaping,
-deep links, table filtering, assets, and the existing dashboard. No shared database,
-live Gemini API, or R engine is used by these checks.
-
-## File manifest
-
-New files:
-
-```text
-backend/src/main/java/com/openstudy/openstudy/
-  config/TeacherAnalyticsAccessConfiguration.java
-  controller/TeacherAnalyticsController.java
-  service/TeacherAnalyticsService.java
-  dto/analytics/TeacherAnalyticsScope.java
-  dto/analytics/TeacherAnalyticsQuery.java
-  dto/analytics/TeacherAnalyticsData.java
-  dto/analytics/TeacherAnalyticsDTO.java
-  provider/analytics/TeacherAnalyticsAccessProvider.java
-  provider/analytics/MockTeacherAnalyticsAccessProvider.java
-  provider/analytics/UnavailableTeacherAnalyticsAccessProvider.java
-  provider/analytics/TeacherAnalyticsDataProvider.java
-  provider/analytics/MockTeacherAnalyticsDataProvider.java
-  provider/analytics/TeacherRAnalyticsProvider.java
-  provider/analytics/MockTeacherRAnalyticsProvider.java
-backend/src/main/resources/static/css/teacher-analytics.css
-backend/src/main/webapp/WEB-INF/jsp/teacher/
-  analytics.jsp
-  analytics/overview.jsp
-  analytics/students.jsp
-  analytics/assessments.jsp
-  analytics/reports.jsp
-backend/src/test/java/com/openstudy/openstudy/
-  controller/TeacherAnalyticsControllerTest.java
-  controller/TeacherAnalyticsPageTest.java
-  provider/TeacherAnalyticsAccessTest.java
-  service/TeacherAnalyticsServiceTest.java
-docs/teacher-analytics.md
-```
-
-Existing files updated only to integrate teacher navigation/layout and its regression check:
-
-```text
-backend/src/main/java/com/openstudy/openstudy/config/TeacherModuleProperties.java
-backend/src/main/java/com/openstudy/openstudy/controller/TeacherLayoutAdvice.java
-backend/src/main/java/com/openstudy/openstudy/service/TeacherDashboardService.java
-backend/src/main/resources/application.properties
-backend/src/main/webapp/WEB-INF/jsp/teacher/fragments/sidebar.jsp
-backend/src/main/webapp/WEB-INF/jsp/teacher/fragments/footer.jsp
-backend/src/test/java/com/openstudy/openstudy/service/TeacherDashboardServiceTest.java
-```
+The follow-up compilation passed; a temporary default-profile backend started
+with Groq selected and completed `SELECT 1`/`DATABASE()` against `openstudy_db`.
+Direct read-only provider previews returned two subjects/three assessments for
+teacher 3 and no subjects/students/assessments for teacher 10. Selecting subject 1
+as teacher 10 returned 403. All four JSP tabs and representative filters rendered
+with HTTP 200 through the existing mock login. Authenticated live browser rendering
+for Athul requires his normal login after restarting; no login was bypassed.

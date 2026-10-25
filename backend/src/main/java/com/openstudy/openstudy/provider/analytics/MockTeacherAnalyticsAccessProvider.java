@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 
 @Component
-@Profile("!prod & !production")
+@Profile("mock & !prod & !production")
 @ConditionalOnProperty(name = "openstudy.teacher-analytics.demo-access", havingValue = "true")
 public class MockTeacherAnalyticsAccessProvider implements TeacherAnalyticsAccessProvider {
     @Override

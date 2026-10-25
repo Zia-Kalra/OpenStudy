@@ -7,6 +7,8 @@ import com.openstudy.openstudy.dto.analytics.TeacherAnalyticsData.*;
 import com.openstudy.openstudy.dto.analytics.TeacherAnalyticsScope;
 import com.openstudy.openstudy.provider.analytics.MockTeacherAnalyticsDataProvider;
 import com.openstudy.openstudy.provider.analytics.TeacherAnalyticsDataProvider;
+import java.net.CookieManager;
+import java.net.CookiePolicy;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -24,15 +26,27 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 class TeacherAnalyticsPageTest {
     @Value("${local.server.port}") private int port;
     @MockitoBean private TeacherAnalyticsDataProvider provider;
+    private HttpClient client;
 
     @BeforeEach
-    void mockData() {
+    void mockData() throws Exception {
         var realMock = new MockTeacherAnalyticsDataProvider();
         given(provider.load(any())).willAnswer(call -> realMock.load(call.getArgument(0)));
+        client = HttpClient.newBuilder()
+                .cookieHandler(new CookieManager(null, CookiePolicy.ACCEPT_ALL))
+                .followRedirects(HttpClient.Redirect.NEVER)
+                .build();
+        var login = client.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/login"))
+                        .header("Content-Type", "application/x-www-form-urlencoded")
+                        .POST(HttpRequest.BodyPublishers.ofString("email=teacher@example.com&password=teacher123&role=teacher"))
+                        .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(login.statusCode()).isEqualTo(302);
+        assertThat(URI.create(login.headers().firstValue("location").orElseThrow()).getPath().split(";", 2)[0])
+                .isEqualTo("/teacher/dashboard");
     }
 
     private HttpResponse<String> get(String route) throws Exception {
-        return HttpClient.newHttpClient().send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + route)).GET().build(),
+        return client.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + route)).GET().build(),
                 HttpResponse.BodyHandlers.ofString());
     }
 

@@ -59,7 +59,7 @@ public class TeacherAnalyticsController {
             HttpServletRequest request, HttpServletResponse response, Model model) {
         response.setHeader("Cache-Control", "no-store");
         response.setHeader("X-Content-Type-Options", "nosniff");
-        var scope = accessProvider.resolve(request.getUserPrincipal());
+        var scope = accessProvider.resolveRequest(request);
         var analytics = service.getAnalytics(scope, query, studentId, reportId);
         model.addAttribute("analytics", analytics);
         model.addAttribute("currentTeacher", scope.teacher());
