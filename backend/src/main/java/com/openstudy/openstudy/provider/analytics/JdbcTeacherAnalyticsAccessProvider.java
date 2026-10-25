@@ -46,11 +46,8 @@ public class JdbcTeacherAnalyticsAccessProvider implements TeacherAnalyticsAcces
                 """, (row, index) -> new TeacherIdentityDTO(row.getString("user_id"),
                         row.getString("full_name"), row.getString("email"), "Teacher", false), user.getUserId());
         if (teachers.size() != 1) { throw new ResponseStatusException(HttpStatus.FORBIDDEN); }
-        Set<String> subjects = new HashSet<>(jdbc.queryForList("""
-                SELECT st.subject_id FROM subject_teachers st
-                JOIN subjects s ON s.subject_id = st.subject_id
-                WHERE st.teacher_id = ?
-                """, String.class, user.getUserId()));
+        Set<String> subjects = new HashSet<>(jdbc.query(TeacherAnalyticsVisibility.SUBJECTS,
+                (row, index) -> row.getString("subject_id"), user.getUserId()));
         // The verified Aiven schema has subject assignments, but no class/cohort relationship.
         return new TeacherAnalyticsScope(teachers.getFirst(), Set.of(), subjects);
     }

@@ -16,6 +16,8 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 /** SELECT-only adapter for the inspected Aiven schema. Every query binds the verified teacher ID. */
 @Component
@@ -31,19 +33,22 @@ public class JdbcTeacherAnalyticsDataProvider implements TeacherAnalyticsDataPro
     public Snapshot load(TeacherAnalyticsScope scope) {
         if (scope.teacher().isDemoIdentity()) { throw new IllegalArgumentException("A database teacher is required."); }
         long teacherId = Long.parseLong(scope.teacher().getTeacherId());
+        if (!Integer.valueOf(1).equals(jdbc.queryForObject("""
+                SELECT COUNT(*) FROM users WHERE user_id=? AND role='TEACHER' AND account_status='ACTIVE'
+                """, Integer.class, teacherId))) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "An active teacher account is required.");
+        }
         var notices = new ArrayList<String>();
-        notices.add("Class/cohort relationships are not stored. Results below cover your assigned subjects; no class membership is inferred.");
-        var subjects = jdbc.query("""
-                SELECT s.subject_id, s.subject_name FROM subjects s
-                JOIN subject_teachers st ON st.subject_id = s.subject_id
-                WHERE st.teacher_id = ? ORDER BY s.subject_name, s.subject_id
-                """, (row, index) -> new Subject(row.getString("subject_id"), row.getString("subject_name")), teacherId)
+        notices.add("Teacher Submissions review access includes existing submitted assignment work. Quiz access remains limited to your own quizzes; draft work is excluded.");
+        notices.add("Class/cohort relationships are not stored. Results include submitted assignments you can review and quizzes you created; no class membership is inferred.");
+        var subjects = jdbc.query(TeacherAnalyticsVisibility.SUBJECTS,
+                (row, index) -> new Subject(row.getString("subject_id"), row.getString("subject_name")), teacherId)
                 .stream().filter(subject -> scope.subjectIds().contains(subject.id())).toList();
         Set<String> subjectIds = new HashSet<>();
         subjects.forEach(subject -> subjectIds.add(subject.id()));
         if (subjects.isEmpty()) {
-            notices.add("No subjects are assigned to your teacher account (user ID " + teacherId
-                    + "). Ask the team to link the correct existing subjects to this account. Other teachers' subjects are not included.");
+            notices.add("No linked subjects or reviewable assessments are available for your teacher account (user ID " + teacherId
+                    + "). Only authorized submitted work and explicitly linked subjects are included.");
             return new Snapshot(List.of(), subjects, List.of(), List.of(), List.of(), List.of(), false, notices);
         }
 
@@ -52,11 +57,13 @@ public class JdbcTeacherAnalyticsDataProvider implements TeacherAnalyticsDataPro
         for (var row : jdbc.queryForList("""
                 SELECT u.user_id, u.full_name, e.subject_id, e.enrolled_at
                 FROM subject_enrollments e
-                JOIN subject_teachers st ON st.subject_id = e.subject_id AND st.teacher_id = ?
                 JOIN users u ON u.user_id = e.student_user_id
-                WHERE e.enrollment_status = 'ENROLLED' AND u.role = 'STUDENT' AND u.account_status = 'ACTIVE'
+                WHERE e.enrollment_status = 'ENROLLED' AND u.role = 'STUDENT'
+                  AND (EXISTS (SELECT 1 FROM subject_teachers st WHERE st.subject_id=e.subject_id AND st.teacher_id=?)
+                    OR EXISTS (SELECT 1 FROM assignments a WHERE a.subject_id=e.subject_id AND a.created_by=?)
+                    OR EXISTS (SELECT 1 FROM quizzes q WHERE q.subject_id=e.subject_id AND q.created_by=?))
                 ORDER BY u.full_name, u.user_id, e.subject_id
-                """, teacherId)) {
+                """, teacherId, teacherId, teacherId)) {
             String subjectId = text(row, "subject_id");
             if (!subjectIds.contains(subjectId)) { continue; }
             String id = text(row, "user_id");
@@ -67,48 +74,54 @@ public class JdbcTeacherAnalyticsDataProvider implements TeacherAnalyticsDataPro
             enrollmentTimes.put(key(id, subjectId), time(row.get("enrolled_at")));
         }
         if (studentsById.isEmpty()) {
-            notices.add("Your subjects have no active student enrollments. Existing submissions alone do not establish enrollment; roster-based grades and participation require real subject enrollment links.");
+            notices.add("No active enrollment roster is stored for these subjects. Recorded participants in reviewable assessments are still shown; expected-work counts and submission rates remain unavailable without enrollment links.");
         }
 
         var assessments = new LinkedHashMap<String, Assessment>();
         var deadlines = new HashMap<String, LocalDateTime>();
+        var ownedAssessments = new HashSet<String>();
         for (var row : jdbc.queryForList("""
                 SELECT a.assignment_id, a.subject_id, a.title, a.max_score,
-                       DATE(COALESCE(a.due_at, a.created_at)) AS assessment_date, a.due_at AS deadline
-                FROM assignments a JOIN subject_teachers st ON st.subject_id = a.subject_id
-                WHERE st.teacher_id = ? AND a.status IN ('PUBLISHED', 'CLOSED')
+                       DATE(COALESCE(a.due_at, a.created_at)) AS assessment_date, a.due_at AS deadline, a.created_by AS owner_id
+                FROM assignments a
+                """ + TeacherAnalyticsVisibility.REVIEWER_JOIN + " WHERE "
+                + TeacherAnalyticsVisibility.ASSIGNMENT_REVIEW + """
+                AND a.status IN ('PUBLISHED', 'CLOSED')
                 ORDER BY a.assignment_id
                 """, teacherId)) {
+            if (((Number) row.get("owner_id")).longValue() == teacherId) { ownedAssessments.add("A-" + text(row, "assignment_id")); }
             addAssessment(row, "A-", "assignment_id", "ASSIGNMENT", subjectIds, assessments, deadlines, notices);
         }
         for (var row : jdbc.queryForList("""
                 SELECT q.quiz_id, q.subject_id, q.title, COALESCE(SUM(b.points), 0) AS max_score,
                        DATE(COALESCE(q.available_from, q.created_at)) AS assessment_date,
-                       q.available_until AS deadline
+                       q.available_until AS deadline, q.created_by AS owner_id
                 FROM quizzes q
-                JOIN subject_teachers st ON st.subject_id = q.subject_id
                 LEFT JOIN quiz_questions qq ON qq.quiz_id = q.quiz_id
                 LEFT JOIN question_bank_questions b ON b.bank_question_id = qq.bank_question_id
-                WHERE st.teacher_id = ? AND q.status IN ('PUBLISHED', 'CLOSED')
+                WHERE q.created_by = ? AND q.status IN ('PUBLISHED', 'CLOSED')
                   AND (q.available_from IS NULL OR q.available_from <= CURRENT_TIMESTAMP)
-                GROUP BY q.quiz_id, q.subject_id, q.title, q.available_from, q.created_at, q.available_until
+                GROUP BY q.quiz_id, q.subject_id, q.title, q.available_from, q.created_at, q.available_until, q.created_by
                 ORDER BY q.quiz_id
                 """, teacherId)) {
+            ownedAssessments.add("Q-" + text(row, "quiz_id"));
             addAssessment(row, "Q-", "quiz_id", "QUIZ", subjectIds, assessments, deadlines, notices);
         }
 
         var results = new LinkedHashMap<String, Result>();
         for (var row : jdbc.queryForList("""
-                SELECT s.student_user_id, s.assignment_id, s.status, s.score, s.feedback
+                SELECT s.student_user_id, s.assignment_id, s.status, s.score, s.feedback, u.full_name
                 FROM assignment_submissions s JOIN assignments a ON a.assignment_id = s.assignment_id
-                JOIN subject_teachers st ON st.subject_id = a.subject_id AND st.teacher_id = ?
-                JOIN subject_enrollments e ON e.subject_id = a.subject_id AND e.student_user_id = s.student_user_id
                 JOIN users u ON u.user_id = s.student_user_id
-                WHERE e.enrollment_status = 'ENROLLED' AND u.role = 'STUDENT' AND u.account_status = 'ACTIVE'
-                  AND s.status IN ('SUBMITTED', 'GRADED', 'RETURNED')
+                """ + TeacherAnalyticsVisibility.REVIEWER_JOIN + " WHERE "
+                + TeacherAnalyticsVisibility.ASSIGNMENT_REVIEW + """
+                AND u.role = 'STUDENT'
+                AND (s.status IN ('SUBMITTED', 'GRADED')
+                     OR (a.created_by = analytics_reviewer.user_id AND s.status = 'RETURNED'))
                 """, teacherId)) {
             String student = text(row, "student_user_id");
             String assessment = "A-" + text(row, "assignment_id");
+            addParticipant(row, student, assessment, studentsById, assessments);
             if (applicable(student, assessment, studentsById, assessments)) {
                 results.put(key(student, assessment), result(row, student, assessment, assessments, notices));
             }
@@ -116,17 +129,16 @@ public class JdbcTeacherAnalyticsDataProvider implements TeacherAnalyticsDataPro
         var chosenAttempts = new HashMap<String, Long>();
         var gradedAttempts = new HashSet<Long>();
         for (var row : jdbc.queryForList("""
-                SELECT t.attempt_id, t.student_user_id, t.quiz_id, t.status, t.score
+                SELECT t.attempt_id, t.student_user_id, t.quiz_id, t.status, t.score, u.full_name
                 FROM quiz_attempts t JOIN quizzes q ON q.quiz_id = t.quiz_id
-                JOIN subject_teachers st ON st.subject_id = q.subject_id AND st.teacher_id = ?
-                JOIN subject_enrollments e ON e.subject_id = q.subject_id AND e.student_user_id = t.student_user_id
                 JOIN users u ON u.user_id = t.student_user_id
-                WHERE e.enrollment_status = 'ENROLLED' AND u.role = 'STUDENT' AND u.account_status = 'ACTIVE'
+                WHERE q.created_by = ? AND u.role = 'STUDENT'
                   AND t.status IN ('SUBMITTED', 'GRADED')
                 ORDER BY t.attempt_number DESC, t.attempt_id DESC
                 """, teacherId)) {
             String student = text(row, "student_user_id");
             String assessment = "Q-" + text(row, "quiz_id");
+            addParticipant(row, student, assessment, studentsById, assessments);
             String key = key(student, assessment);
             if (!applicable(student, assessment, studentsById, assessments) || chosenAttempts.containsKey(key)) { continue; }
             long attempt = ((Number) row.get("attempt_id")).longValue();
@@ -140,9 +152,8 @@ public class JdbcTeacherAnalyticsDataProvider implements TeacherAnalyticsDataPro
         for (var row : jdbc.queryForList("""
                 SELECT qq.question_id, qq.quiz_id, qq.position, b.difficulty
                 FROM quiz_questions qq JOIN quizzes q ON q.quiz_id = qq.quiz_id
-                JOIN subject_teachers st ON st.subject_id = q.subject_id AND st.teacher_id = ?
                 JOIN question_bank_questions b ON b.bank_question_id = qq.bank_question_id
-                ORDER BY qq.quiz_id, qq.position, qq.question_id
+                WHERE q.created_by = ? ORDER BY qq.quiz_id, qq.position, qq.question_id
                 """, teacherId)) {
             String assessment = "Q-" + text(row, "quiz_id");
             if (assessments.containsKey(assessment)) {
@@ -154,12 +165,10 @@ public class JdbcTeacherAnalyticsDataProvider implements TeacherAnalyticsDataPro
                 SELECT t.attempt_id, t.student_user_id, t.quiz_id, a.question_id, a.awarded_points, b.points
                 FROM quiz_answers a JOIN quiz_attempts t ON t.attempt_id = a.attempt_id
                 JOIN quizzes q ON q.quiz_id = t.quiz_id
-                JOIN subject_teachers st ON st.subject_id = q.subject_id AND st.teacher_id = ?
-                JOIN subject_enrollments e ON e.subject_id = q.subject_id AND e.student_user_id = t.student_user_id
                 JOIN users u ON u.user_id = t.student_user_id
                 JOIN quiz_questions qq ON qq.question_id = a.question_id AND qq.quiz_id = t.quiz_id
                 JOIN question_bank_questions b ON b.bank_question_id = qq.bank_question_id
-                WHERE e.enrollment_status = 'ENROLLED' AND u.role = 'STUDENT' AND u.account_status = 'ACTIVE'
+                WHERE q.created_by = ? AND u.role = 'STUDENT'
                   AND t.status = 'GRADED' AND a.awarded_points IS NOT NULL
                 """, teacherId)) {
             long attempt = ((Number) row.get("attempt_id")).longValue();
@@ -181,15 +190,29 @@ public class JdbcTeacherAnalyticsDataProvider implements TeacherAnalyticsDataPro
             for (Student student : studentsById.values()) {
                 if (!student.subjectIds().contains(assessment.subjectId())) { continue; }
                 LocalDateTime joined = enrollmentTimes.get(key(student.id(), assessment.subjectId()));
-                if (deadline == null || !joined.isAfter(deadline) || results.containsKey(key(student.id(), assessment.id()))) {
+                if ((ownedAssessments.contains(assessment.id()) && joined != null && (deadline == null || !joined.isAfter(deadline)))
+                        || results.containsKey(key(student.id(), assessment.id()))) {
                     eligible.add(student.id());
                 }
             }
+            boolean rosterKnown = ownedAssessments.contains(assessment.id()) && studentsById.keySet().stream()
+                    .anyMatch(id -> enrollmentTimes.containsKey(key(id, assessment.subjectId()))) && eligible.stream()
+                    .allMatch(id -> enrollmentTimes.containsKey(key(id, assessment.subjectId())));
             return new Assessment(assessment.id(), assessment.title(), "", assessment.subjectId(), assessment.type(),
-                    assessment.date(), assessment.maximumScore(), eligible);
+                    assessment.date(), assessment.maximumScore(), eligible, rosterKnown);
         }).toList();
         return new Snapshot(List.of(), subjects, new ArrayList<>(studentsById.values()), eligibleAssessments,
                 new ArrayList<>(results.values()), new ArrayList<>(questions.values()), false, notices);
+    }
+
+    private void addParticipant(Map<String, Object> row, String student, String assessment,
+            Map<String, Student> students, Map<String, Assessment> assessments) {
+        Assessment item = assessments.get(assessment);
+        if (item == null) { return; }
+        Student previous = students.get(student);
+        Set<String> subjects = new HashSet<>(previous == null ? Set.of() : previous.subjectIds());
+        subjects.add(item.subjectId());
+        students.put(student, new Student(student, "User " + student, text(row, "full_name"), "", subjects));
     }
 
     private void addAssessment(Map<String, Object> row, String prefix, String idColumn, String type,

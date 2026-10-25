@@ -35,6 +35,11 @@ public class TeacherAnalyticsService {
 
     public TeacherAnalyticsDTO getAnalytics(TeacherAnalyticsScope scope, TeacherAnalyticsQuery query,
             String studentId, String reportId) {
+        return getAnalytics(scope, query, studentId, reportId, null);
+    }
+
+    public TeacherAnalyticsDTO getAnalytics(TeacherAnalyticsScope scope, TeacherAnalyticsQuery query,
+            String studentId, String reportId, String assessmentId) {
         if (scope == null || query == null) { throw new ResponseStatusException(HttpStatus.FORBIDDEN); }
         if ((!"all".equals(query.classId()) && !scope.classIds().contains(query.classId()))
                 || (!"all".equals(query.subjectId()) && !scope.subjectIds().contains(query.subjectId()))) {
@@ -59,7 +64,8 @@ public class TeacherAnalyticsService {
                 && s.subjectIds().stream().anyMatch(subjectIds::contains))
                 .map(s -> new Student(s.id(), s.rollNumber(), s.name(), s.classId(),
                         s.subjectIds().stream().filter(subjectIds::contains).collect(Collectors.toSet()))).toList();
-        var assessments = source.assessments().stream().filter(a -> classIds.contains(a.classId()) && subjectIds.contains(a.subjectId())).toList();
+        var assessments = source.assessments().stream().filter(a -> classIds.contains(a.classId()) && subjectIds.contains(a.subjectId())
+                && a.title().toLowerCase(Locale.ROOT).contains(query.assessmentSearch().toLowerCase(Locale.ROOT))).toList();
         Map<String, Student> studentMap = students.stream().collect(Collectors.toMap(Student::id, s -> s));
         Map<String, Assessment> assessmentMap = assessments.stream().collect(Collectors.toMap(Assessment::id, a -> a));
         Map<Key, Result> results = source.results().stream().filter(r -> {
@@ -77,7 +83,7 @@ public class TeacherAnalyticsService {
         String search = query.search().toLowerCase(Locale.ROOT);
         Comparator<StudentRow> comparator = switch (query.sort()) {
             case "NAME" -> Comparator.comparing(r -> r.student().name(), String.CASE_INSENSITIVE_ORDER);
-            case "SUBMISSION" -> Comparator.<StudentRow>comparingDouble(r -> rate(r.submitted(), r.assigned())).reversed();
+            case "SUBMISSION" -> Comparator.<StudentRow>comparingDouble(r -> r.rosterKnown() ? rate(r.submitted(), r.assigned()) : -1).reversed();
             default -> Comparator.comparing(StudentRow::average, Comparator.nullsLast(Comparator.reverseOrder()));
         };
         var filtered = roster.stream().filter(r -> (r.student().name().toLowerCase(Locale.ROOT).contains(search)
@@ -94,11 +100,13 @@ public class TeacherAnalyticsService {
         var overview = new Overview(roster.size(), graded.size(), average(graded.stream()),
                 graded.stream().max(Double::compareTo).orElse(null), graded.stream().min(Double::compareTo).orElse(null),
                 average(scores(context, null, null, "QUIZ")), average(scores(context, null, null, "ASSIGNMENT")),
-                expected == 0 ? null : rate(submitted, expected), trends(context, null), distribution(roster));
+                expected == 0 || assessments.stream().anyMatch(a -> !a.rosterKnown()) ? null : rate(submitted, expected),
+                trends(context, null), distribution(roster));
         var assessmentRows = assessments.stream().sorted(Comparator.comparing(Assessment::date).reversed().thenComparing(Assessment::id))
                 .map(a -> assessmentRow(a, students, context)).toList();
         var comparison = subjectScores(context, null);
         var questions = source.questions().stream().filter(q -> assessmentMap.containsKey(q.assessmentId())
+                && (assessmentId == null || assessmentId.equals(q.assessmentId()))
                 && "QUIZ".equals(assessmentMap.get(q.assessmentId()).type()))
                 .map(q -> new QuestionRow(assessmentMap.get(q.assessmentId()).title()
                         + (assessmentMap.get(q.assessmentId()).classId().isBlank() ? "" : " · " + assessmentMap.get(q.assessmentId()).classId()),
@@ -110,8 +118,22 @@ public class TeacherAnalyticsService {
         var selectedReport = reportId == null ? (reports.isEmpty() ? null : reports.getFirst())
                 : reports.stream().filter(r -> reportId.equals(r.id())).findFirst()
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Report not found in this scope."));
+        AssessmentDetail assessmentDetail = null;
+        if (assessmentId != null) {
+            Assessment selectedAssessment = assessmentMap.get(assessmentId);
+            if (selectedAssessment == null) { throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Assessment not found in this scope."); }
+            var selectedResults = students.stream().filter(s -> eligible(s, selectedAssessment))
+                    .sorted(Comparator.comparing(Student::name, String.CASE_INSENSITIVE_ORDER)).map(s -> {
+                        Result r = results.get(new Key(s.id(), assessmentId));
+                        return new AssessmentStudentResult(s.id(), s.name(), r == null ? "MISSING" : r.status(),
+                                r == null ? null : r.score(), selectedAssessment.maximumScore(),
+                                r == null || r.score() == null ? null : normalized(r, context), r == null ? "" : r.feedback());
+                    }).toList();
+            assessmentDetail = new AssessmentDetail(assessmentRows.stream().filter(a -> a.id().equals(assessmentId)).findFirst().orElseThrow(),
+                    selectedAssessment.maximumScore(), selectedResults);
+        }
         return new TeacherAnalyticsDTO(classes, subjects, query, overview, filtered, detail,
-                assessmentRows, comparison, questions, reports, selectedReport, source.demo(), source.notices(), statistics(graded));
+                assessmentRows, comparison, questions, reports, selectedReport, source.demo(), source.notices(), statistics(graded), assessmentDetail);
     }
 
     private StudentRow row(Student student, Context context) {
@@ -134,7 +156,7 @@ public class TeacherAnalyticsService {
         };
         return new StudentRow(student, average, average(scores(context, student.id(), null, "QUIZ")),
                 average(scores(context, student.id(), null, "ASSIGNMENT")), applicable.size(), submitted, graded,
-                applicable.size() - submitted, band, label);
+                applicable.size() - submitted, band, label, applicable.stream().allMatch(Assessment::rosterKnown));
     }
 
     private StudentDetail detail(StudentRow row, Context context) {
@@ -158,7 +180,7 @@ public class TeacherAnalyticsService {
         int graded = (int) results.stream().filter(r -> r.score() != null).count();
         return new AssessmentRow(a.id(), a.title(), a.classId(), subjectLabel(context, a.subjectId()), a.type(),
                 a.date().format(DATE), expected, submitted, graded,
-                average(results.stream().filter(r -> r.score() != null).map(r -> normalized(r, context))), rate(submitted, expected));
+                average(results.stream().filter(r -> r.score() != null).map(r -> normalized(r, context))), rate(submitted, expected), a.rosterKnown());
     }
 
     private List<SubjectScore> subjectScores(Context context, String studentId) {

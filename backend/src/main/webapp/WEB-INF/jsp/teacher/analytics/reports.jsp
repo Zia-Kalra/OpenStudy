@@ -24,7 +24,7 @@
                 <div><span>Sample standard deviation</span><strong><c:out value="${analytics.statistics.getDeviationDisplay()}"/></strong></div>
             </div>
             <p>Lower / upper quartile: <c:out value="${analytics.statistics.getQuartileDisplay()}"/>. Standard deviation requires at least two grades. Missing and ungraded work are excluded.</p>
-        </c:when><c:otherwise><div class="ta-empty"><h3>No graded data for this scope</h3><p>Statistics will appear when enrolled students have final grades for published assessments. No sample values are substituted.</p></div></c:otherwise></c:choose>
+        </c:when><c:otherwise><div class="ta-empty"><h3>No graded data for this scope</h3><p>Statistics will appear when students have recorded final grades for published assessments. No sample values are substituted.</p></div></c:otherwise></c:choose>
     </section>
 </c:if>
 <c:if test="${analytics.demo or not empty analytics.reports}">

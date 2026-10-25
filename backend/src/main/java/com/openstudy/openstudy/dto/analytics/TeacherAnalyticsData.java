@@ -25,7 +25,11 @@ public final class TeacherAnalyticsData {
         public String getClassDisplay() { return classId.isBlank() ? "Not linked" : classId; }
     }
     public record Assessment(String id, String title, String classId, String subjectId, String type,
-                             LocalDate date, double maximumScore, Set<String> eligibleStudentIds) {
+                             LocalDate date, double maximumScore, Set<String> eligibleStudentIds, boolean rosterKnown) {
+        public Assessment(String id, String title, String classId, String subjectId, String type,
+                LocalDate date, double maximumScore, Set<String> eligibleStudentIds) {
+            this(id, title, classId, subjectId, type, date, maximumScore, eligibleStudentIds, true);
+        }
         public Assessment(String id, String title, String classId, String subjectId, String type,
                 LocalDate date, double maximumScore) {
             this(id, title, classId, subjectId, type, date, maximumScore, null);

@@ -15,7 +15,7 @@
     <jsp:include page="fragments/sidebar.jsp"/>
     <div class="layout-main">
         <jsp:include page="fragments/navbar.jsp"/>
-        <main class="content teacher-analytics" id="analyticsContent">
+        <main class="content teacher-analytics" id="analyticsContent" data-visibility-version="submitted-review-v1">
             <header class="ta-hero">
                 <div>
                     <p class="ta-eyebrow">CLASS INSIGHTS / TEACHER WORKSPACE</p>
@@ -25,7 +25,7 @@
                 <div class="ta-hero-meta">
                     <span><c:out value="${currentTeacher.displayName}"/> · User ID <c:out value="${currentTeacher.teacherId}"/></span>
                     <c:if test="${analytics.demo}"><span class="ta-demo">DEMO WORKSPACE</span></c:if>
-                    <strong><c:out value="${analytics.overview.totalStudents}"/> assigned students in view</strong>
+                    <strong><c:out value="${analytics.overview.totalStudents}"/> students in view</strong>
                     <span><c:choose><c:when test="${empty analytics.classes}">Class links unavailable</c:when><c:otherwise><c:out value="${fn:length(analytics.classes)}"/> assigned classes</c:otherwise></c:choose> · <c:out value="${fn:length(analytics.subjects)}"/> subjects</span>
                 </div>
             </header>
@@ -58,7 +58,7 @@
                 </c:if>
                 <label>Subject
                     <select name="subjectId">
-                        <option value="all">All assigned subjects</option>
+                        <option value="all">All authorized subjects</option>
                         <c:forEach var="subject" items="${analytics.subjects}"><option value="${fn:escapeXml(subject.id)}" ${analytics.query.subjectId == subject.id ? 'selected' : ''}><c:out value="${subject.label}"/></option></c:forEach>
                     </select>
                 </label>
@@ -68,9 +68,10 @@
                     <input type="hidden" name="sort" value="${fn:escapeXml(analytics.query.sort)}">
                 </c:if>
                 <c:if test="${section == 'reports' and analytics.demo}"><input type="hidden" name="method" value="${fn:escapeXml(analytics.query.method)}"></c:if>
+                <c:if test="${section == 'assessments'}"><input type="hidden" name="assessmentSearch" value="${fn:escapeXml(analytics.query.assessmentSearch)}"></c:if>
                 <button type="submit" class="ta-button">Apply filters</button>
                 <a href="${fn:escapeXml(filterAction)}" class="ta-reset">Reset</a>
-                <span class="ta-scope-note">${analytics.demo ? 'Assigned classes only' : 'Assigned subjects and enrolled students only'}</span>
+                <span class="ta-scope-note">${analytics.demo ? 'Assigned classes only' : 'Linked subjects and reviewable assessments'}</span>
             </form>
             </c:if>
             <jsp:include page="analytics/${section}.jsp"/>

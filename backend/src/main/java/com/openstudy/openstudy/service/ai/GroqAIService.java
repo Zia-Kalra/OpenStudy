@@ -7,6 +7,7 @@ import com.openstudy.openstudy.dto.AssignmentEvaluationResult;
 import com.openstudy.openstudy.dto.GeneratedMCQDTO;
 import com.openstudy.openstudy.dto.MCQGenerationRequest;
 import com.openstudy.openstudy.dto.RubricCriterionDTO;
+import com.openstudy.openstudy.dto.analytics.AnalyticsInsightRequest;
 import java.net.SocketTimeoutException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -55,6 +56,22 @@ public class GroqAIService implements AIService {
         JsonNode payload = parser.parsePayload(callGroq(buildEvaluationPrompt(request)));
         return validator.validateEvaluation(request, parser.readNumber(payload,"suggestedScore"), parser.readText(payload,"feedback"),
                 parser.readStringList(payload,"strengths"), parser.readStringList(payload,"areasForImprovement"), AiResponseValidator.SOURCE_GROQ);
+    }
+
+    @Override
+    public AnalyticsInsightRequest.Selection summarizeAnalytics(AnalyticsInsightRequest request) {
+        JsonNode payload = parser.parsePayload(callGroq("Help a teacher prioritize the supplied calculated facts. "
+                + "Select one to three distinct fact IDs and one eligible recommendation ID. Do not generate prose, "
+                + "scores, diagnoses, predictions or additional facts. Return JSON only: "
+                + "{\"factIds\":[\"existing_fact_id\"],\"recommendationId\":\"existing_recommendation_id\"}. "
+                + "Facts: " + request.facts() + ". Eligible recommendations: " + request.recommendations()));
+        List<String> ids = parser.readStringList(payload, "factIds");
+        String recommendation = parser.readText(payload, "recommendationId");
+        if (ids.isEmpty() || ids.size() > 3 || ids.stream().distinct().count() != ids.size()
+                || !request.facts().keySet().containsAll(ids) || !request.recommendations().containsKey(recommendation)) {
+            throw new AiServiceException(AiErrorCode.UNEXPECTED_RESPONSE, "Groq returned an unsupported insight selection.");
+        }
+        return new AnalyticsInsightRequest.Selection(ids, recommendation);
     }
 
     String callGroq(String prompt) {

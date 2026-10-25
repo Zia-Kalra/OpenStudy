@@ -30,22 +30,7 @@ Member 3's separate `AssignmentAiService` is preserved. It is a module-specific
 service, not a second shared AIService bean. It consumes the same key/text-model
 properties and the vision-model setting, preserving image/PDF processing, retries,
 question generation and assignment grading. Its controllers and access checks
-are unchanged by the merge. The shared adapter does not add new analytics AI UI.
-
-Groq replaces Gemini's MCQ generation and suggested evaluation functionality.
-Obsolete Gemini configuration, service/parser, local-only diagnostics/launcher,
-profile and provider-specific tests were retired together. Shared request/response
-validation, mock AI, authentication, analytics and error-handling tests remain.
-[The old Gemini setup page](gemini-local.md) now points here.
-
-Merge validation uses Java compilation (including test-source compilation without
-executing tests) and isolated Spring bean checks. No live Groq call, Aiven query,
-schema operation or data migration is required for this merge. Do not start the
-default application merely to check the merge: integration includes an assignment
-expiry scheduler that writes to the configured database during normal operation.
-
-Earlier, on 22 October, the configured Groq key and text model passed a read-only
-model-list check. This is historical verification, not a fresh generation check.
+are unchanged by the merge. The shared adapter also supports the Member 5 class/student insight UI; it selects anonymous calculated fact IDs and eligible advice, never generated grade values. See [Teacher Analytics](teacher-analytics.md).
 
 Protocol references:
 [Groq API reference](https://console.groq.com/docs/api-reference),

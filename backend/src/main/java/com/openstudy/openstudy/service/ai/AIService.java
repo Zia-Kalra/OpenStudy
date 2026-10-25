@@ -5,6 +5,7 @@ import com.openstudy.openstudy.dto.AssignmentEvaluationResult;
 import com.openstudy.openstudy.dto.GeneratedMCQDTO;
 import com.openstudy.openstudy.dto.MCQGenerationRequest;
 import java.util.List;
+import com.openstudy.openstudy.dto.analytics.AnalyticsInsightRequest;
 
 /**
  * Shared AI contract owned by Member 5.
@@ -17,4 +18,8 @@ public interface AIService {
     List<GeneratedMCQDTO> generateMCQs(MCQGenerationRequest request);
 
     AssignmentEvaluationResult evaluateAssignmentAnswer(AssignmentEvaluationRequest request);
+
+    default AnalyticsInsightRequest.Selection summarizeAnalytics(AnalyticsInsightRequest request) {
+        throw new AiServiceException(AiErrorCode.UNEXPECTED_RESPONSE, "Analytics insights require the live Groq provider.");
+    }
 }

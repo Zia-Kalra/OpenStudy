@@ -9,7 +9,14 @@ public record TeacherAnalyticsDTO(List<Cohort> classes, List<Subject> subjects, 
         Overview overview, List<StudentRow> students, StudentDetail selectedStudent,
         List<AssessmentRow> assessments, List<SubjectScore> subjectComparison, List<QuestionRow> questions,
         List<RReport> reports, RReport selectedReport, boolean demo, List<String> notices,
-        DescriptiveStatistics statistics) {
+        DescriptiveStatistics statistics, AssessmentDetail selectedAssessment) {
+    public TeacherAnalyticsDTO(List<Cohort> classes, List<Subject> subjects, TeacherAnalyticsQuery query,
+            Overview overview, List<StudentRow> students, StudentDetail selectedStudent,
+            List<AssessmentRow> assessments, List<SubjectScore> subjectComparison, List<QuestionRow> questions,
+            List<RReport> reports, RReport selectedReport, boolean demo, List<String> notices, DescriptiveStatistics statistics) {
+        this(classes, subjects, query, overview, students, selectedStudent, assessments, subjectComparison,
+                questions, reports, selectedReport, demo, notices, statistics, null);
+    }
     public TeacherAnalyticsDTO(List<Cohort> classes, List<Subject> subjects, TeacherAnalyticsQuery query,
             Overview overview, List<StudentRow> students, StudentDetail selectedStudent,
             List<AssessmentRow> assessments, List<SubjectScore> subjectComparison, List<QuestionRow> questions,
@@ -36,6 +43,7 @@ public record TeacherAnalyticsDTO(List<Cohort> classes, List<Subject> subjects, 
     public boolean isDemo() { return demo; }
     public List<String> getNotices() { return notices; }
     public DescriptiveStatistics getStatistics() { return statistics; }
+    public AssessmentDetail getSelectedAssessment() { return selectedAssessment; }
 
     public static String percent(Double value) { return value == null ? "—" : String.format(Locale.ROOT, "%.1f%%", value); }
 
@@ -68,7 +76,11 @@ public record TeacherAnalyticsDTO(List<Cohort> classes, List<Subject> subjects, 
         public double getPercent() { return percent; }
     }
     public record StudentRow(Student student, Double average, Double quizAverage, Double assignmentAverage,
-            int assigned, int submitted, int graded, int missing, String band, String bandLabel) {
+            int assigned, int submitted, int graded, int missing, String band, String bandLabel, boolean rosterKnown) {
+        public StudentRow(Student student, Double average, Double quizAverage, Double assignmentAverage,
+                int assigned, int submitted, int graded, int missing, String band, String bandLabel) {
+            this(student, average, quizAverage, assignmentAverage, assigned, submitted, graded, missing, band, bandLabel, true);
+        }
         public Student getStudent() { return student; }
         public double getAverage() { return average == null ? 0 : average; }
         public String getAverageDisplay() { return percent(average); }
@@ -80,7 +92,7 @@ public record TeacherAnalyticsDTO(List<Cohort> classes, List<Subject> subjects, 
         public int getMissing() { return missing; }
         public String getBand() { return band; }
         public String getBandLabel() { return bandLabel; }
-        public String getSubmissionDisplay() { return assigned == 0 ? "—" : submitted + " / " + assigned; }
+        public String getSubmissionDisplay() { return !rosterKnown ? submitted + " recorded" : assigned == 0 ? "—" : submitted + " / " + assigned; }
     }
     public record StudentDetail(StudentRow summary, List<SubjectScore> subjects, List<History> history,
             List<Trend> trends, List<String> feedback) {
@@ -109,7 +121,11 @@ public record TeacherAnalyticsDTO(List<Cohort> classes, List<Subject> subjects, 
         public String getFeedback() { return feedback; }
     }
     public record AssessmentRow(String id, String title, String classId, String subject, String type, String date,
-            int expected, int submitted, int graded, Double average, double submissionRate) {
+            int expected, int submitted, int graded, Double average, double submissionRate, boolean rosterKnown) {
+        public AssessmentRow(String id, String title, String classId, String subject, String type, String date,
+                int expected, int submitted, int graded, Double average, double submissionRate) {
+            this(id, title, classId, subject, type, date, expected, submitted, graded, average, submissionRate, true);
+        }
         public String getId() { return id; }
         public String getTitle() { return title; }
         public String getClassId() { return classId; }
@@ -121,8 +137,24 @@ public record TeacherAnalyticsDTO(List<Cohort> classes, List<Subject> subjects, 
         public int getSubmitted() { return submitted; }
         public int getGraded() { return graded; }
         public String getAverageDisplay() { return percent(average); }
-        public String getSubmissionDisplay() { return expected == 0 ? "\u2014" : percent(submissionRate); }
-        public double getSubmissionRate() { return submissionRate; }
+        public String getSubmissionDisplay() { return !rosterKnown || expected == 0 ? "\u2014" : percent(submissionRate); }
+        public double getSubmissionRate() { return rosterKnown ? submissionRate : 0; }
+        public String getExpectedDisplay() { return rosterKnown ? Integer.toString(expected) : "Unknown roster"; }
+    }
+    public record AssessmentDetail(AssessmentRow summary, double maximumScore, List<AssessmentStudentResult> results) {
+        public AssessmentDetail { results = List.copyOf(results); }
+        public AssessmentRow getSummary() { return summary; }
+        public double getMaximumScore() { return maximumScore; }
+        public List<AssessmentStudentResult> getResults() { return results; }
+    }
+    public record AssessmentStudentResult(String studentId, String name, String status, Double score,
+            double maximumScore, Double percentage, String feedback) {
+        public String getStudentId() { return studentId; }
+        public String getName() { return name; }
+        public String getStatus() { return status; }
+        public String getScoreDisplay() { return score == null ? "Not graded" : String.format(Locale.ROOT, "%.2f / %.2f", score, maximumScore); }
+        public String getPercentageDisplay() { return percent(percentage); }
+        public String getFeedback() { return feedback; }
     }
     public record QuestionRow(String assessment, String label, String difficulty, int answered, int correct, double correctRate) {
         public String getAssessment() { return assessment; }
