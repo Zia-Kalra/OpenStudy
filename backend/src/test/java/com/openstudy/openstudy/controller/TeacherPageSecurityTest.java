@@ -1,5 +1,6 @@
 package com.openstudy.openstudy.controller;
 
+import com.openstudy.openstudy.MockJdbcTestConfiguration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 import com.openstudy.openstudy.dto.DashboardStatsDTO;
@@ -17,6 +18,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
@@ -27,6 +29,9 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
         "openstudy.modules.quizzes-path=/teacher/coming-soon?module=quizzes&marker=\"attribute-marker\""
 })
 @ActiveProfiles("mock")
+
+@Import(MockJdbcTestConfiguration.class)
+
 class TeacherPageSecurityTest {
     @Value("${local.server.port}")
     private int port;

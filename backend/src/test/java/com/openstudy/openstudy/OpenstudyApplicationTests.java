@@ -11,6 +11,10 @@ import com.openstudy.openstudy.service.ai.GeminiAIService;
 import javax.sql.DataSource;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.jdbc.core.JdbcTemplate;
+
 @SpringBootTest
 @ActiveProfiles("mock")
 class OpenstudyApplicationTests {
@@ -24,5 +28,13 @@ class OpenstudyApplicationTests {
 		assertThat(context.getBeansOfType(GeminiAIService.class)).isEmpty();
 		assertThat(context.getBean(AIService.class)).isInstanceOf(MockAIService.class);
 	}
-
+	@TestConfiguration
+	static class MockJdbcConfiguration {
+		
+		@Bean
+		JdbcTemplate jdbcTemplate() {
+			return org.mockito.Mockito.mock(JdbcTemplate.class);
+		}
+	}
 }
+
