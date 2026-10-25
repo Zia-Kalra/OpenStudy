@@ -56,7 +56,7 @@ openstudy.ai.groq.model=${GROQ_MODEL:openai/gpt-oss-20b}
 openstudy.ai.groq.vision-model=${GROQ_VISION_MODEL:qwen/qwen3.8-27b}
 ```
 
-The implementation calls:
+The shared provider uses the same Groq endpoint as the integrated assignment module. See [current configuration](groq-configuration.md).
 
 The default text-only evaluation model is `openai/gpt-oss-20b`. Answers with attachments use `qwen/qwen3.8-27b` for grading; images and scanned PDF pages are also transcribed with that vision model. Text-based PDF pages are extracted directly and are not also rendered for OCR. Oversized images are reduced to 1280 pixels on their longest edge, and scanned pages/images are sent one per vision request to keep each request smaller. Temporary Groq 429 responses are retried when the response supplies a retry delay (up to 30 seconds per retry). See the official [vision documentation](https://console.groq.com/docs/vision). Override the models with `GROQ_MODEL` and `GROQ_VISION_MODEL` when needed.
 
@@ -166,11 +166,11 @@ Sidebar and quick actions currently point at `/teacher/coming-soon` unless prope
 ```properties
 openstudy.modules.question-bank-path=/teacher/coming-soon?module=question-bank
 openstudy.modules.quizzes-path=/teacher/coming-soon?module=quizzes
-openstudy.modules.assignments-path=/teacher/coming-soon?module=assignments
-openstudy.modules.submissions-path=/teacher/coming-soon?module=submissions
-openstudy.modules.analytics-path=/teacher/coming-soon?module=analytics
+openstudy.modules.assignments-path=/teacher/assignments
+openstudy.modules.submissions-path=/teacher/submissions
+openstudy.modules.analytics-path=/teacher/analytics
 openstudy.modules.profile-path=/teacher/coming-soon?module=profile
-openstudy.modules.logout-path=/teacher/coming-soon?module=logout
+openstudy.modules.logout-path=/logout
 ```
 
 When a member’s route exists, change only the matching property. Do not redirect those links to unrelated pages.
@@ -180,9 +180,9 @@ The teacher name `Dr. Priya Sharma` / `DEMO-TEACHER-001` is a labeled demo ident
 ## 8. What remains unfinished
 
 - Live JDBC dashboard counts
-- Member 1 authentication, profile, and logout
+- Profile integration (existing Member 1 authentication/logout are preserved)
 - Member 2 question bank and quiz screens (including teacher review of AI MCQs)
-- Member 3 assignment/submission/evaluation screens
+- Member 3 assignment/submission/evaluation screens are integrated; coordinate further changes with their owner
 - Member 4 R analytics
 - Teacher-facing AI UI (intentionally not in Phase 1)
 - End-to-end Groq calls in CI (no real key is stored in the repo)

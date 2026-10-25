@@ -7,6 +7,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -23,8 +24,8 @@ public class StudentDashboardController {
     private final JdbcTemplate db;
     private static final DateTimeFormatter RESULT_DATE = DateTimeFormatter.ofPattern("dd MMM yyyy");
 
-    public StudentDashboardController(JdbcTemplate db) {
-        this.db = db;
+    public StudentDashboardController(ObjectProvider<JdbcTemplate> database) {
+        this.db = database.getIfAvailable();
     }
 
     @GetMapping("/student/dashboard")
@@ -36,7 +37,7 @@ public class StudentDashboardController {
         LocalDateTime now = LocalDateTime.now(APP_ZONE);
         LocalDateTime upcomingEnd = now.plusMonths(1);
         LocalDateTime attemptedStart = now.minusMonths(1);
-        int pendingAssignments = db.queryForObject("SELECT COUNT(*) FROM assignments a "
+        int pendingAssignments = db == null ? 0 : db.queryForObject("SELECT COUNT(*) FROM assignments a "
                 + "WHERE a.status='PUBLISHED' AND a.due_at BETWEEN ? AND ? "
                 + "AND NOT EXISTS (SELECT 1 FROM assignment_submissions s WHERE s.assignment_id=a.assignment_id "
                 + "AND s.student_user_id=? AND s.status IN ('SUBMITTED','GRADED'))",
@@ -51,7 +52,7 @@ public class StudentDashboardController {
                 Map.of("title", "DBMS Concepts Quiz", "meta", "15 Questions", "time", "Due: 25 Oct 2026", "status", "Pending"),
                 Map.of("title", "R Programming Quiz", "meta", "20 Questions", "time", "Due: 20 Oct 2026", "status", "Ongoing"),
                 Map.of("title", "Operating Systems Quiz", "meta", "25 Questions", "time", "Due: 05 Nov 2026", "status", "Upcoming")));
-        List<Map<String, Object>> recentAssignments = db.queryForList("SELECT a.assignment_id,a.title,a.due_at, "
+        List<Map<String, Object>> recentAssignments = db == null ? List.of() : db.queryForList("SELECT a.assignment_id,a.title,a.due_at, "
                 + "(SELECT COUNT(*) FROM assignment_questions q WHERE q.assignment_id=a.assignment_id) question_count, "
                 + "CASE WHEN recent_submission.submitted_at IS NOT NULL THEN 'Attempted' ELSE 'Pending' END assignment_status, "
                 + "recent_submission.submitted_at "
@@ -104,7 +105,7 @@ public class StudentDashboardController {
         model.addAttribute("activePage", "results");
         User user = (User) session.getAttribute("loggedInUser");
         long studentId = user == null || user.getUserId() == null ? -1L : user.getUserId();
-        List<Map<String, Object>> resultRows = db.queryForList("SELECT a.title,a.max_score,s.score,s.status,s.evaluation_status,s.graded_at,s.updated_at, "
+        List<Map<String, Object>> resultRows = db == null ? List.of() : db.queryForList("SELECT a.title,a.max_score,s.score,s.status,s.evaluation_status,s.graded_at,s.updated_at, "
                 + "(SELECT SUM(COALESCE(aa.final_score,aa.ai_score,0)) FROM assignment_answers aa WHERE aa.submission_id=s.submission_id) evaluated_score, "
                 + "(SELECT MAX(aa.evaluated_at) FROM assignment_answers aa WHERE aa.submission_id=s.submission_id) answer_evaluated_at "
                 + "FROM assignment_submissions s JOIN assignments a ON a.assignment_id=s.assignment_id "

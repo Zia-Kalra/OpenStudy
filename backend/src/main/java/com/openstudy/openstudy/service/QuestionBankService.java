@@ -2,6 +2,7 @@ package com.openstudy.openstudy.service;
 
 import java.util.List;
 
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -11,6 +12,7 @@ import com.openstudy.openstudy.dto.QuestionBankQuestionResponse;
 import com.openstudy.openstudy.repository.QuestionBankRepository;
 
 @Service
+@Profile("!mock")
 public class QuestionBankService {
 
     private final QuestionBankRepository repository;

@@ -10,7 +10,7 @@ public class TeacherModuleProperties {
     private String quizzesPath = "/teacher/coming-soon?module=quizzes";
     private String assignmentsPath = "/teacher/assignments";
     private String submissionsPath = "/teacher/submissions";
-    private String analyticsPath = "/teacher/coming-soon?module=analytics";
+    private String analyticsPath = "/teacher/analytics";
     private String profilePath = "/teacher/coming-soon?module=profile";
     private String logoutPath = "/logout";
 
