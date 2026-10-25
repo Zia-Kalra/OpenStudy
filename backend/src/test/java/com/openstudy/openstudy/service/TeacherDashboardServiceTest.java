@@ -32,8 +32,12 @@ class TeacherDashboardServiceTest {
         assertThat(dashboard.isEmptyActivity()).isFalse();
         assertThat(dashboard.getRecentActivity()).hasSize(4);
         assertThat(dashboard.getQuickActions()).hasSize(4);
-        assertThat(dashboard.getQuickActions()).filteredOn(action -> !action.getId().equals("view-analytics"))
+        assertThat(dashboard.getQuickActions()).filteredOn(action -> action.getId().equals("create-quiz"))
                 .allMatch(action -> action.getHref().contains("/teacher/coming-soon"));
+        assertThat(dashboard.getQuickActions()).filteredOn(action -> action.getId().equals("create-assignment"))
+                .allMatch(action -> action.getHref().equals("/teacher/assignments") && !action.isPlaceholder());
+        assertThat(dashboard.getQuickActions()).filteredOn(action -> action.getId().equals("view-submissions"))
+                .allMatch(action -> action.getHref().equals("/teacher/submissions") && !action.isPlaceholder());
         assertThat(dashboard.getQuickActions()).filteredOn(action -> action.getId().equals("view-analytics"))
                 .allMatch(action -> action.getHref().equals("/teacher/analytics") && !action.isPlaceholder() && action.getOwner().equals("Member 5"));
         assertThat(dashboard.getGreeting()).contains("Dr. Priya Sharma");

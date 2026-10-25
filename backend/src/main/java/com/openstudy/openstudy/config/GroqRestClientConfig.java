@@ -17,7 +17,7 @@ public class GroqRestClientConfig {
         factory.setConnectTimeout(Duration.ofSeconds(10));
         factory.setReadTimeout(Duration.ofMillis(properties.getTimeoutMs()));
         // Fixed official HTTPS endpoint: never send an API key to a configurable host.
-        return RestClient.builder().baseUrl("https://api.groq.com/openai/v1")
+        return RestClient.builder().baseUrl(properties.getBaseUrl())
                 .requestFactory(factory).build();
     }
 }

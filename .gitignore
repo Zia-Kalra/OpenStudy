@@ -87,3 +87,7 @@ backend/certs/
 # ==========================================
 .DS_Store
 Thumbs.db
+
+# Explicit protection for local launch credentials in either workspace layout.
+.vscode/launch.json
+backend/.vscode/launch.json

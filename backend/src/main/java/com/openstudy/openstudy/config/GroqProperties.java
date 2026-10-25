@@ -6,12 +6,15 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class GroqProperties {
     private String apiKey = "";
     private String model = "openai/gpt-oss-20b";
-    private int timeoutMs = 30000;
+    private String baseUrl = "https://api.groq.com/openai/v1";
+    private int timeoutMs = 60000;
 
     public String getApiKey() { return apiKey == null ? "" : apiKey.strip(); }
     public void setApiKey(String value) { apiKey = value; }
     public String getModel() { return model; }
     public void setModel(String value) { model = value; }
+    public String getBaseUrl() { return baseUrl; }
+    public void setBaseUrl(String value) { baseUrl = value; }
     public int getTimeoutMs() { return timeoutMs; }
     public void setTimeoutMs(int value) { timeoutMs = value; }
     public boolean hasApiKey() {
@@ -19,6 +22,9 @@ public class GroqProperties {
                 && getApiKey().chars().noneMatch(Character::isISOControl);
     }
     public void validateTransport() {
+        if (!"https://api.groq.com/openai/v1".equals(baseUrl)) {
+            throw new IllegalArgumentException("Groq base URL must be the official HTTPS API endpoint.");
+        }
         if (model == null || !model.matches("[A-Za-z0-9][A-Za-z0-9._/-]{0,119}")) {
             throw new IllegalArgumentException("Configure a valid GROQ_MODEL identifier.");
         }

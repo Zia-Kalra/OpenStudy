@@ -63,13 +63,16 @@
                     <tbody>
                     <c:forEach var="result" items="${results}">
                         <tr>
-                            <td>${result.title}</td>
-                            <td>${result.type}</td>
-                            <td>${result.score}</td>
-                            <td><span class="pill ${result.status == 'Passed' ? 'green' : 'gray'}">${result.status}</span></td>
-                            <td>${result.date}</td>
+                            <td><c:out value="${result.title}" /></td>
+                            <td><c:out value="${result.type}" /></td>
+                            <td><c:out value="${result.score}" /></td>
+                            <td><span class="pill ${result.status == 'Passed' ? 'green' : (result.status == 'Failed' ? 'red' : 'gray')}"><c:out value="${result.status}" /></span></td>
+                            <td><c:out value="${result.date}" /></td>
                         </tr>
                     </c:forEach>
+                    <c:if test="${empty results}">
+                        <tr><td colspan="5" class="empty-state">No evaluated or submitted assignments yet.</td></tr>
+                    </c:if>
                     </tbody>
                 </table>
             </div>

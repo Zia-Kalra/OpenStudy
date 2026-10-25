@@ -13,7 +13,7 @@ import com.openstudy.openstudy.service.MockAuthService;
 import com.openstudy.openstudy.service.QuestionBankService;
 import com.openstudy.openstudy.service.ai.AIService;
 import com.openstudy.openstudy.service.ai.MockAIService;
-import com.openstudy.openstudy.service.ai.GeminiAIService;
+import com.openstudy.openstudy.service.ai.GroqAIService;
 import javax.sql.DataSource;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -32,7 +32,7 @@ class OpenstudyApplicationTests {
 		assertThat(context.getBeansOfType(QuestionBankService.class)).isEmpty();
 		assertThat(context.getBeansOfType(QuestionBankController.class)).isEmpty();
 		assertThat(context.getBean(AuthService.class)).isInstanceOf(MockAuthService.class);
-		assertThat(context.getBeansOfType(GeminiAIService.class)).isEmpty();
+		assertThat(context.getBeansOfType(GroqAIService.class)).isEmpty();
 		assertThat(context.getBean(AIService.class)).isInstanceOf(MockAIService.class);
 	}
 

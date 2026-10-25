@@ -24,7 +24,7 @@ class ErrorPagesTest {
     }
 
     @Test
-    void geminiFailuresDoNotInventDummyContent() {
+    void groqFailuresDoNotInventDummyContent() {
         var missing = ErrorPages.fromAi(new AiServiceException(AiErrorCode.MISSING_API_KEY, "hidden"));
         assertThat(missing.status()).isEqualTo(502);
         assertThat(missing.explanation()).contains("Dummy AI content was not generated").doesNotContain("hidden");

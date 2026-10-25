@@ -101,21 +101,21 @@ public final class ErrorPages {
                     "Check the form fields and try again. Your previous input is still on the page when the form is redisplayed.",
                     false, false);
             case MISSING_API_KEY, INVALID_API_KEY -> new ErrorPageContent(502, code.name(), "The AI service is not configured",
-                    "Live Gemini access is not available with the current credentials. Dummy AI content was not generated.",
+                    "Live Groq access is not available with the current credentials. Dummy AI content was not generated.",
                     false, false);
             case INVALID_MODEL -> new ErrorPageContent(502, code.name(), "The selected AI model is unavailable",
-                    "The configured Gemini model was rejected. Dummy AI content was not generated.", false, false);
+                    "The configured Groq model was rejected. Dummy AI content was not generated.", false, false);
             case RATE_LIMITED -> new ErrorPageContent(429, code.name(), "The AI service is rate limited",
-                    "Gemini quota or rate limits were reached. Wait and retry. Dummy AI content was not generated.",
+                    "Groq quota or rate limits were reached. Wait and retry. Dummy AI content was not generated.",
                     true, false);
             case TIMEOUT -> new ErrorPageContent(504, code.name(), "The AI service timed out",
-                    "Gemini did not respond in time. You can retry. Dummy AI content was not generated.", true, false);
+                    "Groq did not respond in time. You can retry. Dummy AI content was not generated.", true, false);
             case NETWORK_FAILURE -> new ErrorPageContent(502, code.name(), "The AI service could not be reached",
-                    "OpenStudy could not complete the Gemini request. You can retry. Dummy AI content was not generated.",
+                    "OpenStudy could not complete the Groq request. You can retry. Dummy AI content was not generated.",
                     true, false);
             case EMPTY_RESPONSE, INVALID_JSON, UNEXPECTED_RESPONSE -> new ErrorPageContent(502, code.name(),
                     "The AI service returned an unusable response",
-                    "Gemini did not return a valid result. Dummy AI content was not generated. You can retry.",
+                    "Groq did not return a valid result. Dummy AI content was not generated. You can retry.",
                     true, false);
         };
     }
