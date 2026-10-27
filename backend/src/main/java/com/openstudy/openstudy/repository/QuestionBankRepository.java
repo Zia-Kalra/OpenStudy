@@ -4,6 +4,7 @@ import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.util.List;
 
+import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
@@ -14,6 +15,7 @@ import com.openstudy.openstudy.dto.QuestionBankQuestionRequest;
 import com.openstudy.openstudy.dto.QuestionBankQuestionResponse;
 
 @Repository
+@Profile("!mock")
 public class QuestionBankRepository {
 
     private final JdbcTemplate jdbcTemplate;

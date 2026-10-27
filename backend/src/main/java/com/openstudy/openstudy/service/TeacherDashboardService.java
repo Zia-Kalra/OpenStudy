@@ -93,23 +93,23 @@ public class TeacherDashboardService {
                 new QuickActionDTO(
                         "create-assignment",
                         "Create Assignment",
-                        "Opens Member 3's assignment module when it is integrated.",
+                        "Create and publish assignments for enrolled students.",
                         moduleProperties.getAssignmentsPath(),
                         "Member 3",
                         isPlaceholder(moduleProperties.getAssignmentsPath())),
                 new QuickActionDTO(
                         "view-submissions",
                         "View Submissions",
-                        "Opens Member 3's submissions view when it is integrated.",
+                        "Review student submissions and AI evaluations.",
                         moduleProperties.getSubmissionsPath(),
                         "Member 3",
                         isPlaceholder(moduleProperties.getSubmissionsPath())),
                 new QuickActionDTO(
                         "view-analytics",
                         "View Analytics",
-                        "Opens Member 4's analytics module when it is integrated.",
+                        "Compare assigned students, assessments, and class performance.",
                         moduleProperties.getAnalyticsPath(),
-                        "Member 4",
+                        "Member 5",
                         isPlaceholder(moduleProperties.getAnalyticsPath())));
     }
 

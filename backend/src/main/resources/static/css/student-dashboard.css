@@ -425,6 +425,10 @@ input {
   background: rgba(107, 114, 128, 0.12);
   color: #374151;
 }
+.pill.red {
+  background: rgba(239, 68, 68, 0.12);
+  color: #b91c1c;
+}
 
 .listing .ghost-button {
   display: inline-flex;

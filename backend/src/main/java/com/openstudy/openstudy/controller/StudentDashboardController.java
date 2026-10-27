@@ -2,8 +2,13 @@ package com.openstudy.openstudy.controller;
 
 import com.openstudy.openstudy.model.User;
 import jakarta.servlet.http.HttpSession;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -14,13 +19,32 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 @Controller
 public class StudentDashboardController {
 
+    private static final ZoneId APP_ZONE = ZoneId.of("Asia/Kolkata");
+    private static final DateTimeFormatter DASHBOARD_DATE = DateTimeFormatter.ofPattern("dd MMM yyyy");
+    private final JdbcTemplate db;
+    private static final DateTimeFormatter RESULT_DATE = DateTimeFormatter.ofPattern("dd MMM yyyy");
+
+    public StudentDashboardController(ObjectProvider<JdbcTemplate> database) {
+        this.db = database.getIfAvailable();
+    }
+
     @GetMapping("/student/dashboard")
     public String dashboard(Model model, HttpSession session) {
         addCurrentUser(model, session);
         model.addAttribute("activePage", "dashboard");
+        User user = (User) session.getAttribute("loggedInUser");
+        long studentId = user == null || user.getUserId() == null ? -1L : user.getUserId();
+        LocalDateTime now = LocalDateTime.now(APP_ZONE);
+        LocalDateTime upcomingEnd = now.plusMonths(1);
+        LocalDateTime attemptedStart = now.minusMonths(1);
+        int pendingAssignments = db == null ? 0 : db.queryForObject("SELECT COUNT(*) FROM assignments a "
+                + "WHERE a.status='PUBLISHED' AND a.due_at BETWEEN ? AND ? "
+                + "AND NOT EXISTS (SELECT 1 FROM assignment_submissions s WHERE s.assignment_id=a.assignment_id "
+                + "AND s.student_user_id=? AND s.status IN ('SUBMITTED','GRADED'))",
+                Integer.class, now, upcomingEnd, studentId);
         model.addAttribute("stats", List.of(
                 Map.of("label", "Available Quizzes", "value", "3", "accent", "blue"),
-                Map.of("label", "Pending Assignments", "value", "2", "accent", "purple"),
+                Map.of("label", "Pending Assignments", "value", pendingAssignments, "accent", "purple"),
                 Map.of("label", "Completed Tasks", "value", "5", "accent", "green"),
                 Map.of("label", "Average Score", "value", "76.4%", "accent", "orange")));
         model.addAttribute("recentQuizzes", List.of(
@@ -28,11 +52,30 @@ public class StudentDashboardController {
                 Map.of("title", "DBMS Concepts Quiz", "meta", "15 Questions", "time", "Due: 25 Oct 2026", "status", "Pending"),
                 Map.of("title", "R Programming Quiz", "meta", "20 Questions", "time", "Due: 20 Oct 2026", "status", "Ongoing"),
                 Map.of("title", "Operating Systems Quiz", "meta", "25 Questions", "time", "Due: 05 Nov 2026", "status", "Upcoming")));
-        model.addAttribute("recentAssignments", List.of(
-                Map.of("title", "Database Normalization", "meta", "5 Questions", "time", "Due: 25 Oct 2026", "status", "Pending"),
-                Map.of("title", "Java Collections", "meta", "3 Questions", "time", "Due: 26 Oct 2026", "status", "Pending"),
-                Map.of("title", "R Static Analysis", "meta", "4 Questions", "time", "Due: 20 Oct 2026", "status", "Pending"),
-                Map.of("title", "Operating Systems Concepts", "meta", "4 Questions", "time", "Due: 05 Nov 2026", "status", "Pending")));
+        List<Map<String, Object>> recentAssignments = db == null ? List.of() : db.queryForList("SELECT a.assignment_id,a.title,a.due_at, "
+                + "(SELECT COUNT(*) FROM assignment_questions q WHERE q.assignment_id=a.assignment_id) question_count, "
+                + "CASE WHEN recent_submission.submitted_at IS NOT NULL THEN 'Attempted' ELSE 'Pending' END assignment_status, "
+                + "recent_submission.submitted_at "
+                + "FROM assignments a LEFT JOIN (SELECT assignment_id,MAX(submitted_at) submitted_at "
+                + "FROM assignment_submissions WHERE student_user_id=? AND status IN ('SUBMITTED','GRADED') "
+                + "AND submitted_at BETWEEN ? AND ? GROUP BY assignment_id) recent_submission "
+                + "ON recent_submission.assignment_id=a.assignment_id "
+                + "WHERE a.status='PUBLISHED' AND ((recent_submission.submitted_at IS NOT NULL) "
+                + "OR (a.due_at BETWEEN ? AND ? AND NOT EXISTS (SELECT 1 FROM assignment_submissions s "
+                + "WHERE s.assignment_id=a.assignment_id AND s.student_user_id=? AND s.status IN ('SUBMITTED','GRADED'))) ) "
+                + "ORDER BY CASE WHEN recent_submission.submitted_at IS NOT NULL THEN 0 ELSE 1 END, "
+                + "COALESCE(recent_submission.submitted_at,a.due_at) DESC LIMIT 10",
+                studentId, attemptedStart, now, now, upcomingEnd, studentId);
+        recentAssignments.forEach(assignment -> {
+            assignment.put("meta", assignment.get("question_count") + " Questions");
+            boolean attempted = "Attempted".equals(assignment.get("assignment_status"));
+            Object dateValue = attempted ? assignment.get("submitted_at") : assignment.get("due_at");
+            LocalDateTime displayDate = dateValue instanceof java.sql.Timestamp timestamp
+                    ? timestamp.toLocalDateTime() : (LocalDateTime) dateValue;
+            assignment.put("time", (attempted ? "Submitted: " : "Due: ") + displayDate.format(DASHBOARD_DATE));
+            assignment.put("status", attempted ? "Attempted" : "Pending");
+        });
+        model.addAttribute("recentAssignments", recentAssignments);
         return "student/dashboard";
     }
 
@@ -51,12 +94,8 @@ public class StudentDashboardController {
     @GetMapping("/student/assignments")
     public String assignments(Model model, HttpSession session) {
         addCurrentUser(model, session);
+        model.addAttribute("assignmentUiRole", "STUDENT");
         model.addAttribute("activePage", "assignments");
-        model.addAttribute("assignments", List.of(
-                Map.of("title", "Database Normalization", "details", "5 Questions", "marks", "30 marks", "due", "Due: 25 Oct 2026", "status", "Pending"),
-                Map.of("title", "Java Collections", "details", "3 Questions", "marks", "30 marks", "due", "Due: 26 Oct 2026", "status", "Pending"),
-                Map.of("title", "R Statistical Analysis", "details", "4 Questions", "marks", "40 marks", "due", "Due: 20 Oct 2026", "status", "Pending"),
-                Map.of("title", "Operating Systems Concepts", "details", "4 Questions", "marks", "30 marks", "due", "Due: 05 Nov 2026", "status", "Pending")));
         return "student/assignments";
     }
 
@@ -64,12 +103,46 @@ public class StudentDashboardController {
     public String results(Model model, HttpSession session) {
         addCurrentUser(model, session);
         model.addAttribute("activePage", "results");
-        model.addAttribute("results", List.of(
-                Map.of("title", "Java Basics Quiz", "type", "Quiz", "score", "80/100", "status", "Passed", "date", "15 Oct 2026"),
-                Map.of("title", "DBMS Concepts Quiz", "type", "Quiz", "score", "50/100", "status", "Pending", "date", "15 Oct 2026"),
-                Map.of("title", "Java Collections Assignment", "type", "Assignment", "score", "92/100", "status", "Passed", "date", "10 Oct 2026"),
-                Map.of("title", "R Programming Quiz", "type", "Quiz", "score", "72/100", "status", "Passed", "date", "08 Oct 2026")));
+        User user = (User) session.getAttribute("loggedInUser");
+        long studentId = user == null || user.getUserId() == null ? -1L : user.getUserId();
+        List<Map<String, Object>> resultRows = db == null ? List.of() : db.queryForList("SELECT a.title,a.max_score,s.score,s.status,s.evaluation_status,s.graded_at,s.updated_at, "
+                + "(SELECT SUM(COALESCE(aa.final_score,aa.ai_score,0)) FROM assignment_answers aa WHERE aa.submission_id=s.submission_id) evaluated_score, "
+                + "(SELECT MAX(aa.evaluated_at) FROM assignment_answers aa WHERE aa.submission_id=s.submission_id) answer_evaluated_at "
+                + "FROM assignment_submissions s JOIN assignments a ON a.assignment_id=s.assignment_id "
+                + "WHERE s.student_user_id=? AND s.status IN ('SUBMITTED','GRADED') "
+                + "ORDER BY COALESCE(s.graded_at,s.submitted_at) DESC", studentId);
+        List<Map<String, Object>> results = resultRows.stream().map(row -> {
+            java.math.BigDecimal maxScore = (java.math.BigDecimal) row.get("max_score");
+            java.math.BigDecimal score = (java.math.BigDecimal) row.get("score");
+            java.math.BigDecimal evaluatedScore = (java.math.BigDecimal) row.get("evaluated_score");
+            boolean teacherEvaluated = "GRADED".equalsIgnoreCase(String.valueOf(row.get("status")));
+            boolean aiEvaluated = "EVALUATED".equalsIgnoreCase(String.valueOf(row.get("evaluation_status")));
+            boolean evaluated = (teacherEvaluated || aiEvaluated) && (score != null || evaluatedScore != null);
+            String status = "Pending result";
+            String marks = "Pending result";
+            String date = "—";
+            if (evaluated) {
+                java.math.BigDecimal finalScore = teacherEvaluated && score != null ? score : evaluatedScore != null ? evaluatedScore : score;
+                marks = formatMarks(finalScore) + "/" + formatMarks(maxScore);
+                status = finalScore.multiply(java.math.BigDecimal.valueOf(100))
+                        .compareTo(maxScore.multiply(java.math.BigDecimal.valueOf(40))) > 0 ? "Passed" : "Failed";
+                Object evaluatedAt = teacherEvaluated ? row.get("graded_at") : row.get("answer_evaluated_at");
+                if (evaluatedAt == null) evaluatedAt = row.get("updated_at");
+                if (evaluatedAt instanceof java.sql.Timestamp timestamp)
+                    date = timestamp.toLocalDateTime().format(RESULT_DATE);
+                else if (evaluatedAt instanceof java.time.LocalDateTime dateTime)
+                    date = dateTime.format(RESULT_DATE);
+            }
+            return Map.<String, Object>of("title", String.valueOf(row.get("title")), "type", "Assignment",
+                    "score", marks, "status", status, "date", date);
+        }).toList();
+        // Quiz results can be merged into this shared row format by the quiz module: title, type, score, status, date.
+        model.addAttribute("results", results);
         return "student/results";
+    }
+
+    private String formatMarks(java.math.BigDecimal value) {
+        return value.stripTrailingZeros().toPlainString();
     }
 
     @GetMapping("/student/performance")
