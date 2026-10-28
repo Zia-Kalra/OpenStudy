@@ -95,11 +95,19 @@ class TeacherAnalyticsServiceTest {
 
     @Test
     void emptyDataDoesNotInventZeroGradesOrDivideByZero() {
-        var empty = new TeacherAnalyticsService(s -> new Snapshot(List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), true), (s, q) -> List.of());
+        var empty = new TeacherAnalyticsService(
+                s -> new Snapshot(
+                        List.of(), List.of(), List.of(),
+                        List.of(), List.of(), List.of(), true),
+                (s, q) -> List.of()
+        );
+
         var result = empty.getAnalytics(scope, query(null, null, null, null), null, null);
+
         assertThat(result.overview().totalStudents()).isZero();
         assertThat(result.overview().average()).isNull();
         assertThat(result.overview().highest()).isNull();
+        assertThat(result.overview().lowest()).isNull();
         assertThat(result.overview().submissionRate()).isZero();
         assertThat(result.overview().getAverageDisplay()).isEqualTo("—");
         assertThat(result.selectedStudent()).isNull();

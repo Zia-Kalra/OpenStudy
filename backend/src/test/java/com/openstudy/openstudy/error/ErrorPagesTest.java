@@ -27,7 +27,13 @@ class ErrorPagesTest {
     void groqFailuresDoNotInventDummyContent() {
         var missing = ErrorPages.fromAi(new AiServiceException(AiErrorCode.MISSING_API_KEY, "hidden"));
         assertThat(missing.status()).isEqualTo(502);
-        assertThat(missing.explanation()).contains("Dummy AI content was not generated").doesNotContain("hidden");
+        assertThat(missing.explanation()).contains("GROQ_API_KEY", "No dummy AI content was generated")
+                .doesNotContain("hidden");
+
+        var rejected = ErrorPages.fromAi(new AiServiceException(AiErrorCode.INVALID_API_KEY, "private upstream detail"));
+        assertThat(rejected.status()).isEqualTo(502);
+        assertThat(rejected.explanation()).contains("Groq rejected", "Do not share the key")
+                .doesNotContain("private upstream detail");
 
         var rate = ErrorPages.fromAi(new AiServiceException(AiErrorCode.RATE_LIMITED, "quota"));
         assertThat(rate.status()).isEqualTo(429);

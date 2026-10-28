@@ -92,7 +92,7 @@ public class GlobalExceptionHandler {
             if (ex instanceof CannotGetJdbcConnectionException) {
                 log.error("JDBC connection failure ref={} causes={}", referenceId, databaseFailureDetails(ex));
             }
-            log.debug("Technical failure ref={}", referenceId, ex);
+            log.error("Technical failure ref={}", referenceId, ex);
         } else {
             log.warn("Request failed status={} code={} ref={} path={}", content.status(), content.code(), referenceId,
                     request.getRequestURI());

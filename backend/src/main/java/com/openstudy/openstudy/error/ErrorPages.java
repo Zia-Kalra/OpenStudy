@@ -100,8 +100,11 @@ public final class ErrorPages {
             case VALIDATION_FAILED -> new ErrorPageContent(400, code.name(), "The AI request was invalid",
                     "Check the form fields and try again. Your previous input is still on the page when the form is redisplayed.",
                     false, false);
-            case MISSING_API_KEY, INVALID_API_KEY -> new ErrorPageContent(502, code.name(), "The AI service is not configured",
-                    "Live Groq access is not available with the current credentials. Dummy AI content was not generated.",
+            case MISSING_API_KEY -> new ErrorPageContent(502, code.name(), "Groq is not configured",
+                    "GROQ_API_KEY is not set for the backend process. Configure it in the backend environment or ignored VS Code launch configuration, then restart OpenStudy. No dummy AI content was generated.",
+                    false, false);
+            case INVALID_API_KEY -> new ErrorPageContent(502, code.name(), "Groq rejected the configured credentials",
+                    "Groq rejected the backend API key or denied its access. Verify that GROQ_API_KEY is valid and enabled, then restart OpenStudy. Do not share the key. No dummy AI content was generated.",
                     false, false);
             case INVALID_MODEL -> new ErrorPageContent(502, code.name(), "The selected AI model is unavailable",
                     "The configured Groq model was rejected. Dummy AI content was not generated.", false, false);

@@ -37,8 +37,9 @@ class QuestionBankServiceTest {
                 QuestionBankQuestionRequest.Difficulty.EASY,
                 List.of(
                         new QuestionBankOptionRequest("Correct", true),
-                        new QuestionBankOptionRequest("Incorrect", false)));
+                        new QuestionBankOptionRequest("Incorrect", false)), 1L, "Basics");
         when(repository.findActiveTeacherId("teacher@example.test")).thenReturn(12L);
+        when(repository.teacherOwnsSubject(12L, 1L)).thenReturn(true);
         when(repository.insertQuestion(12L, request)).thenReturn(41L);
 
         long result = service.createManual("teacher@example.test", request);

@@ -1,5 +1,8 @@
 package com.openstudy.openstudy.controller;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.openstudy.openstudy.model.User;
 import jakarta.servlet.http.HttpSession;
 import java.time.LocalDateTime;
@@ -19,6 +22,8 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 @Controller
 public class StudentDashboardController {
 
+    private static final Logger log = LoggerFactory.getLogger(StudentDashboardController.class);
+    
     private static final ZoneId APP_ZONE = ZoneId.of("Asia/Kolkata");
     private static final DateTimeFormatter DASHBOARD_DATE = DateTimeFormatter.ofPattern("dd MMM yyyy");
     private final JdbcTemplate db;
@@ -37,11 +42,20 @@ public class StudentDashboardController {
         LocalDateTime now = LocalDateTime.now(APP_ZONE);
         LocalDateTime upcomingEnd = now.plusMonths(1);
         LocalDateTime attemptedStart = now.minusMonths(1);
-        int pendingAssignments = db == null ? 0 : db.queryForObject("SELECT COUNT(*) FROM assignments a "
-                + "WHERE a.status='PUBLISHED' AND a.due_at BETWEEN ? AND ? "
-                + "AND NOT EXISTS (SELECT 1 FROM assignment_submissions s WHERE s.assignment_id=a.assignment_id "
-                + "AND s.student_user_id=? AND s.status IN ('SUBMITTED','GRADED'))",
-                Integer.class, now, upcomingEnd, studentId);
+        Integer pendingAssignments = 0;
+        if (db != null) {
+            Integer count = db.queryForObject(
+                "SELECT COUNT(*) FROM assignments a "
+                    + "WHERE a.status='PUBLISHED' AND a.due_at BETWEEN ? AND ? "
+                    + "AND NOT EXISTS (SELECT 1 FROM assignment_submissions s "
+                    + "WHERE s.assignment_id=a.assignment_id "
+                    + "AND s.student_user_id=? AND s.status IN ('SUBMITTED','GRADED'))",
+                Integer.class, now, upcomingEnd, studentId
+            );
+            
+            pendingAssignments = count == null ? 0 : count;
+        }
+        
         model.addAttribute("stats", List.of(
                 Map.of("label", "Available Quizzes", "value", "3", "accent", "blue"),
                 Map.of("label", "Pending Assignments", "value", pendingAssignments, "accent", "purple"),
@@ -83,11 +97,6 @@ public class StudentDashboardController {
     public String quizzes(Model model, HttpSession session) {
         addCurrentUser(model, session);
         model.addAttribute("activePage", "quizzes");
-        model.addAttribute("quizzes", List.of(
-                Map.of("title", "Java Basics Quiz", "questions", "20 Questions", "marks", "30 marks", "due", "Due: 20 Oct 2026", "difficulty", "Easy", "status", "Ongoing"),
-                Map.of("title", "DBMS Concepts Quiz", "questions", "15 Questions", "marks", "15 marks", "due", "Due: 25 Oct 2026", "difficulty", "Medium", "status", "Upcoming"),
-                Map.of("title", "R Programming Quiz", "questions", "20 Questions", "marks", "30 marks", "due", "Due: 20 Oct 2026", "difficulty", "Medium", "status", "Ongoing"),
-                Map.of("title", "Operating Systems Quiz", "questions", "25 Questions", "marks", "25 marks", "due", "Due: 05 Nov 2026", "difficulty", "Hard", "status", "Upcoming")));
         return "student/quizzes";
     }
 

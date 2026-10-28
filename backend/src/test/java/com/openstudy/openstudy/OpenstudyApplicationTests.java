@@ -30,14 +30,15 @@ class OpenstudyApplicationTests {
 
 	@Test
 	void contextLoads() {
-		assertThat(context.getBeansOfType(DataSource.class)).isEmpty();
-		assertThat(context.getBeansOfType(JdbcTemplate.class)).isEmpty();
-		assertThat(context.getBeansOfType(QuestionBankRepository.class)).isEmpty();
-		assertThat(context.getBeansOfType(QuestionBankService.class)).isEmpty();
-		assertThat(context.getBeansOfType(QuestionBankController.class)).isEmpty();
-		assertThat(context.getBean(AuthService.class)).isInstanceOf(MockAuthService.class);
-		assertThat(context.getBeansOfType(GroqAIService.class)).isEmpty();
-		assertThat(context.getBean(AIService.class)).isInstanceOf(MockAIService.class);
+    	assertThat(context.getBeansOfType(DataSource.class)).isEmpty();
+    	assertThat(context.getBeansOfType(JdbcTemplate.class))
+            .containsKey("jdbcTemplate");
+    	assertThat(context.getBeansOfType(QuestionBankRepository.class)).isEmpty();
+    	assertThat(context.getBeansOfType(QuestionBankService.class)).isEmpty();
+    	assertThat(context.getBeansOfType(QuestionBankController.class)).isEmpty();
+    	assertThat(context.getBean(AuthService.class)).isInstanceOf(MockAuthService.class);
+    	assertThat(context.getBeansOfType(GroqAIService.class)).isEmpty();
+    	assertThat(context.getBean(AIService.class)).isInstanceOf(MockAIService.class);
 	}
 	@TestConfiguration
 	static class MockJdbcConfiguration {

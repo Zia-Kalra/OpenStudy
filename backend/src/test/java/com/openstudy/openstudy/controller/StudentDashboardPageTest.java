@@ -90,7 +90,12 @@ class StudentDashboardPageTest {
             "MY-COLLEGE-ID-7", "Updated Student", "updated@example.com", "Account ID (system-generated)",
             "id=\"profileEditForm\"", "Save Changes");
         assertThat(profile.body()).doesNotContain("23CS101", "ABC Engineering College");
-        assertThat(authenticatedGet("/student/quizzes", sessionCookie).statusCode()).isEqualTo(200);
+        var availableQuizzes = authenticatedGet("/student/quizzes", sessionCookie);
+        assertThat(availableQuizzes.statusCode()).isEqualTo(200);
+        assertThat(availableQuizzes.body()).contains(
+                "My Quizzes", "id=\"pendingQuizzesTab\"", "id=\"attemptedQuizzesTab\"",
+                "id=\"quizStartDialog\"", "id=\"quizList\"", "student-quiz.js")
+                .doesNotContain("Java Basics Quiz", "DBMS Concepts Quiz");
         assertThat(authenticatedGet("/student/assignments", sessionCookie).statusCode()).isEqualTo(200);
         assertThat(authenticatedGet("/student/results", sessionCookie).statusCode()).isEqualTo(200);
         assertThat(authenticatedGet("/student/performance", sessionCookie).statusCode()).isEqualTo(200);

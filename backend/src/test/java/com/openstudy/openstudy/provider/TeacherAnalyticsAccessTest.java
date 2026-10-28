@@ -27,10 +27,17 @@ class TeacherAnalyticsAccessTest {
     @Test
     void demoAccessEnablesMockProviderOutsideProduction() {
         new ApplicationContextRunner()
-                .withPropertyValues("openstudy.teacher-analytics.demo-access=true")
-                .withUserConfiguration(TeacherAnalyticsAccessConfiguration.class, MockTeacherAnalyticsAccessProvider.class)
-                .run(context -> assertThat(context.getBean(TeacherAnalyticsAccessProvider.class))
-                        .isInstanceOf(MockTeacherAnalyticsAccessProvider.class));
+                .withPropertyValues(
+                        "spring.profiles.active=mock",
+                        "openstudy.teacher-analytics.demo-access=true")
+                .withUserConfiguration(
+                        TeacherAnalyticsAccessConfiguration.class,
+                        MockTeacherAnalyticsAccessProvider.class)
+                .run(context -> {
+                    assertThat(context).hasSingleBean(TeacherAnalyticsAccessProvider.class);
+                    assertThat(context.getBean(TeacherAnalyticsAccessProvider.class))
+                            .isInstanceOf(MockTeacherAnalyticsAccessProvider.class);
+                });
     }
 
     @Test

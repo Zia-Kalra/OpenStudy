@@ -97,10 +97,11 @@ public class TeacherAnalyticsService {
         var graded = results.values().stream().filter(r -> r.score() != null).map(r -> normalized(r, context)).toList();
         int expected = roster.stream().mapToInt(StudentRow::assigned).sum();
         int submitted = roster.stream().mapToInt(StudentRow::submitted).sum();
-        var overview = new Overview(roster.size(), graded.size(), average(graded.stream()),
-                graded.stream().max(Double::compareTo).orElse(null), graded.stream().min(Double::compareTo).orElse(null),
+        var overview = new Overview(roster.size(), graded.size(), graded.isEmpty() ? null : average(graded.stream()),
+                graded.isEmpty() ? null : graded.stream().mapToDouble(Double::doubleValue).max().stream().boxed().findFirst().orElse(null),
+                graded.isEmpty() ? null : graded.stream().mapToDouble(Double::doubleValue).min().stream().boxed().findFirst().orElse(null),
                 average(scores(context, null, null, "QUIZ")), average(scores(context, null, null, "ASSIGNMENT")),
-                expected == 0 || assessments.stream().anyMatch(a -> !a.rosterKnown()) ? null : rate(submitted, expected),
+                expected == 0 ? 0.0 : rate(submitted, expected),
                 trends(context, null), distribution(roster));
         var assessmentRows = assessments.stream().sorted(Comparator.comparing(Assessment::date).reversed().thenComparing(Assessment::id))
                 .map(a -> assessmentRow(a, students, context)).toList();

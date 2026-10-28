@@ -9,6 +9,7 @@ import com.openstudy.openstudy.dto.MCQGenerationRequest;
 import com.openstudy.openstudy.dto.RubricCriterionDTO;
 import com.openstudy.openstudy.dto.analytics.AnalyticsInsightRequest;
 import java.net.SocketTimeoutException;
+import java.util.Locale;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -38,6 +39,8 @@ public class GroqAIService implements AIService {
         this.properties = properties;
         this.parser = parser;
         this.validator = validator;
+        log.info("Groq provider initialized (apiKeyConfigured={}, model={}).",
+                properties.hasApiKey(), properties.getModel());
     }
 
     @Override public List<GeneratedMCQDTO> generateMCQs(MCQGenerationRequest request) {
@@ -142,11 +145,23 @@ public class GroqAIService implements AIService {
     private AiServiceException mapHttpError(RestClientResponseException ex) {
         int status = ex.getStatusCode().value();
         log.warn("Groq returned HTTP {} for model {}.", status, properties.getModel());
-        if (status == 401 || status == 403) return new AiServiceException(AiErrorCode.INVALID_API_KEY,"Groq rejected the configured API key.");
+        if (status == 401 || status == 403) return new AiServiceException(AiErrorCode.INVALID_API_KEY,"Groq rejected the configured API key or denied access.");
         if (status == 429) return new AiServiceException(AiErrorCode.RATE_LIMITED,"Groq AI limit exhausted (HTTP 429). Check the Groq console quota or retry after it resets.");
-        if (status == 404) return new AiServiceException(AiErrorCode.INVALID_MODEL,"Groq rejected the configured model.");
+        if (status == 404 || isModelError(status, ex.getResponseBodyAsString())) return new AiServiceException(AiErrorCode.INVALID_MODEL,"Groq rejected the configured model.");
         if (status == 408 || status == 504) return new AiServiceException(AiErrorCode.TIMEOUT,"Groq request timed out.");
         if (status >= 500) return new AiServiceException(AiErrorCode.NETWORK_FAILURE,"Groq API is unavailable (HTTP " + status + ").");
         return new AiServiceException(AiErrorCode.UNEXPECTED_RESPONSE,"Groq returned HTTP " + status + ".");
+    }
+
+    private boolean isModelError(int status, String responseBody) {
+        if (status != 400 || responseBody == null || responseBody.isBlank()) return false;
+        String safeClassification = responseBody.toLowerCase(Locale.ROOT);
+        return safeClassification.contains("model_not_found")
+                || safeClassification.contains("model_decommissioned")
+                || safeClassification.contains("invalid_model")
+                || (safeClassification.contains("model")
+                    && (safeClassification.contains("not found")
+                        || safeClassification.contains("does not exist")
+                        || safeClassification.contains("decommissioned")));
     }
 }
