@@ -3,6 +3,8 @@ package com.openstudy.openstudy.controller;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.jdbc.BadSqlGrammarException;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -96,9 +98,20 @@ public class AuthController {
         } catch (UnsupportedOperationException exception) {
             redirectAttributes.addFlashAttribute("errorMessage", "Sign-up requires the database-backed profile. Start the app without the mock profile.");
             return signupRedirect(selectedRole);
+        } catch (DataAccessResourceFailureException exception) {
+            LOGGER.error("Account sign-up failed: could not connect to the database.", exception);
+            redirectAttributes.addFlashAttribute("errorMessage",
+                    "We couldn't reach the database. Check that DB_URL, DB_USERNAME, DB_PASSWORD and the truststore in .env are correct, then try again.");
+            return signupRedirect(selectedRole);
+        } catch (BadSqlGrammarException exception) {
+            LOGGER.error("Account sign-up failed: the users table is missing or out of date.", exception);
+            redirectAttributes.addFlashAttribute("errorMessage",
+                    "The database is missing the users table. Run the scripts in database/migrations, then try again.");
+            return signupRedirect(selectedRole);
         } catch (RuntimeException exception) {
             LOGGER.error("Account sign-up failed.", exception);
-            redirectAttributes.addFlashAttribute("errorMessage", "Sign-up is unavailable. Check the database connection and try again.");
+            redirectAttributes.addFlashAttribute("errorMessage",
+                    "Something went wrong while creating your account. Please try again.");
             return signupRedirect(selectedRole);
         }
     }

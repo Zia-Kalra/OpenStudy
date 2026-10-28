@@ -1,51 +1,53 @@
 <%@ page contentType="text/html;charset=UTF-8" language="java" %>
 <%@ taglib prefix="c" uri="jakarta.tags.core" %>
+<%@ taglib prefix="fn" uri="jakarta.tags.functions" %>
+<%@ taglib prefix="os" tagdir="/WEB-INF/tags" %>
+<c:set var="base" value="${fn:escapeXml(pageContext.request.contextPath)}"/>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OpenStudy | Choose New Password</title>
-    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/student-dashboard.css">
+    <title>Choose a new password · OpenStudy</title>
+    <link rel="stylesheet" href="${base}/css/openstudy.css">
 </head>
-<body class="login-shell">
-<div class="login-card">
-    <aside class="login-brand">
-        <div>
-            <div class="logo-lockup"><div class="logo-mark">OS</div><h1 class="logo-text">OpenStudy</h1></div>
-            <p>Choose a new password for your account.</p>
-        </div>
-        <div class="book-illustration" aria-hidden="true"></div>
-    </aside>
-    <main class="login-form-panel">
-        <div class="login-form">
+<body>
+<div class="os-auth">
+    <div class="os-auth__card">
+        <jsp:include page="fragments/auth-brand.jsp"/>
+
+        <main class="os-auth__form">
             <h2>Choose a new password</h2>
+            <p class="os-auth__sub">Use at least 8 characters.</p>
+
             <c:if test="${not empty errorMessage}">
-                <div class="form-alert" role="alert"><c:out value="${errorMessage}" /></div>
+                <div class="os-alert os-alert--error" role="alert"><p><c:out value="${errorMessage}"/></p></div>
             </c:if>
             <c:choose>
                 <c:when test="${validResetToken}">
-                    <form method="post" action="${pageContext.request.contextPath}/reset-password">
-                        <input type="hidden" name="token" value="<c:out value='${resetToken}' />">
-                        <label class="input-wrap">
-                            <span class="field-icon" aria-hidden="true">🔒</span>
+                    <form method="post" action="${base}/reset-password">
+                        <input type="hidden" name="token" value="<c:out value='${resetToken}'/>">
+                        <label class="os-input">
+                            <os:icon name="lock"/>
+                            <span class="sr-only">New password</span>
                             <input type="password" name="password" minlength="8" maxlength="72" placeholder="New password" autocomplete="new-password" required>
                         </label>
-                        <label class="input-wrap">
-                            <span class="field-icon" aria-hidden="true">🔒</span>
+                        <label class="os-input">
+                            <os:icon name="lock"/>
+                            <span class="sr-only">Confirm new password</span>
                             <input type="password" name="confirmPassword" minlength="8" maxlength="72" placeholder="Confirm new password" autocomplete="new-password" required>
                         </label>
-                        <button type="submit" class="login-btn">Update Password</button>
+                        <button type="submit" class="os-btn os-btn--primary">Update password</button>
                     </form>
                 </c:when>
                 <c:otherwise>
-                    <p class="profile-error" role="alert">This reset link is invalid or has expired. Request a new one.</p>
-                    <div class="account-link"><a href="${pageContext.request.contextPath}/forgot-password">Request another reset link</a></div>
+                    <div class="os-alert os-alert--error" role="alert"><p>This reset link is invalid or has expired. <a href="${base}/forgot-password">Request a new one</a>.</p></div>
                 </c:otherwise>
             </c:choose>
-            <div class="account-link"><a href="${pageContext.request.contextPath}/login">Back to login</a></div>
-        </div>
-    </main>
+
+            <p class="os-auth__foot"><a href="${base}/login">Back to login</a></p>
+        </main>
+    </div>
 </div>
 </body>
 </html>

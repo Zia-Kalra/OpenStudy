@@ -1,115 +1,72 @@
-<%@ page contentType="text/html;charset=UTF-8" language="java" %> <%@ taglib
-prefix="c" uri="jakarta.tags.core" %>
+<%@ page contentType="text/html;charset=UTF-8" language="java" %>
+<%@ taglib prefix="c" uri="jakarta.tags.core" %>
+<%@ taglib prefix="fn" uri="jakarta.tags.functions" %>
+<%@ taglib prefix="os" tagdir="/WEB-INF/tags" %>
+<c:set var="base" value="${fn:escapeXml(pageContext.request.contextPath)}"/>
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>OpenStudy | Login</title>
-    <link
-      rel="stylesheet"
-      href="${pageContext.request.contextPath}/css/student-dashboard.css"
-    />
-  </head>
-  <body class="login-shell">
-    <div class="login-card">
-      <aside class="login-brand">
-        <div>
-          <div class="logo-lockup">
-            <div class="logo-mark">OS</div>
-            <h1 class="logo-text">OpenStudy</h1>
-          </div>
-          <p>
-            A smart platform for quizzes and assignments with AI-powered
-            evaluation and analytics.
-          </p>
-        </div>
-        <div class="book-illustration" aria-hidden="true"></div>
-      </aside>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Log in · OpenStudy</title>
+    <link rel="stylesheet" href="${base}/css/openstudy.css">
+</head>
+<body>
+<div class="os-auth">
+    <div class="os-auth__card">
+        <jsp:include page="fragments/auth-brand.jsp"/>
 
-      <main class="login-form-panel">
-        <div class="login-form">
-          <h2>Welcome Back</h2>
-          <div class="subtitle">Login to your account</div>
+        <main class="os-auth__form">
+            <h2>Welcome back</h2>
+            <p class="os-auth__sub">Log in to your account</p>
 
-          <form method="post" action="${pageContext.request.contextPath}/login">
-            <div class="role-picker" aria-label="Select role">
-              <button type="button" class="role-btn active" data-role="student">
-                Student
-              </button>
-              <button type="button" class="role-btn" data-role="teacher">
-                Teacher
-              </button>
-            </div>
-            <input type="hidden" name="role" id="login-role" value="student" />
+            <form method="post" action="${base}/login">
+                <div class="os-segmented" role="group" aria-label="I am a">
+                    <button type="button" class="is-active" data-role="student" aria-pressed="true">Student</button>
+                    <button type="button" data-role="teacher" aria-pressed="false">Teacher</button>
+                </div>
+                <input type="hidden" name="role" id="loginRole" value="student">
 
-            <c:if test="${not empty errorMessage}">
-              <div class="form-alert" role="alert">
-                <c:out value="${errorMessage}" />
-              </div>
-            </c:if>
+                <c:if test="${not empty errorMessage}">
+                    <div class="os-alert os-alert--error" role="alert"><p><c:out value="${errorMessage}"/></p></div>
+                </c:if>
 
-            <label class="input-wrap">
-              <span class="field-icon">✉</span>
-              <input
-                type="email"
-                name="email"
-                aria-label="Email address"
-                placeholder="Email address"
-                autocomplete="username"
-                required
-              />
-            </label>
+                <label class="os-input">
+                    <os:icon name="mail"/>
+                    <span class="sr-only">Email address</span>
+                    <input type="email" name="email" placeholder="Email address" autocomplete="username" required>
+                </label>
+                <label class="os-input">
+                    <os:icon name="lock"/>
+                    <span class="sr-only">Password</span>
+                    <input type="password" name="password" placeholder="Password" autocomplete="current-password" required>
+                </label>
 
-            <label class="input-wrap">
-              <span class="field-icon">🔒</span>
-              <input
-                type="password"
-                name="password"
-                aria-label="Password"
-                placeholder="Password"
-                autocomplete="current-password"
-                required
-              />
-            </label>
+                <div class="os-auth__row"><a href="${base}/forgot-password">Forgot password?</a></div>
 
-            <div class="login-actions">
-              <span></span>
-              <a href="${pageContext.request.contextPath}/forgot-password"
-                >Forgot password?</a
-              >
-            </div>
+                <button type="submit" class="os-btn os-btn--primary">Log in</button>
+            </form>
 
-            <button type="submit" class="login-btn">Login</button>
-
-            <div class="account-link">
-              Don't have an account?
-              <a id="signup-link" href="${pageContext.request.contextPath}/signup?role=student">Sign up</a>
-            </div>
-          </form>
-
-          <script>
-            document.addEventListener("DOMContentLoaded", function () {
-              const roleInput = document.getElementById("login-role");
-              const signupLink = document.getElementById("signup-link");
-              const buttons = document.querySelectorAll(".role-btn");
-              function setRole(role) {
-                roleInput.value = role;
-                signupLink.href = "${pageContext.request.contextPath}/signup?role=" + encodeURIComponent(role);
-              }
-              buttons.forEach(function (button) {
-                button.addEventListener("click", function () {
-                  buttons.forEach(function (btn) {
-                    btn.classList.remove("active");
-                  });
-                  button.classList.add("active");
-                  setRole(button.dataset.role);
-                });
-              });
-            });
-          </script>
-        </div>
-      </main>
+            <p class="os-auth__foot">Don't have an account? <a id="signupLink" href="${base}/signup?role=student">Sign up</a></p>
+        </main>
     </div>
-  </body>
+</div>
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        var roleInput = document.getElementById("loginRole");
+        var signupLink = document.getElementById("signupLink");
+        var buttons = document.querySelectorAll("[data-role]");
+        buttons.forEach(function (button) {
+            button.addEventListener("click", function () {
+                buttons.forEach(function (other) {
+                    other.classList.toggle("is-active", other === button);
+                    other.setAttribute("aria-pressed", String(other === button));
+                });
+                roleInput.value = button.dataset.role;
+                signupLink.href = "${base}/signup?role=" + encodeURIComponent(button.dataset.role);
+            });
+        });
+    });
+</script>
+</body>
 </html>

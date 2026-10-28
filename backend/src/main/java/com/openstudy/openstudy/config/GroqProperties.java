@@ -2,12 +2,12 @@ package com.openstudy.openstudy.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-@ConfigurationProperties(prefix = "openstudy.ai.gemini")
-public class GeminiProperties {
+@ConfigurationProperties(prefix = "openstudy.ai.groq")
+public class GroqProperties {
 
     private String apiKey = "";
-    private String model = "gemini-3.8-flash";
-    private String baseUrl = "https://generativelanguage.googleapis.com/v1beta";
+    private String model = "llama-3.3-70b-versatile";
+    private String baseUrl = "https://api.groq.com/openai/v1";
     private int timeoutMs = 30000;
 
     public String getApiKey() {
@@ -48,7 +48,7 @@ public class GeminiProperties {
 
     @Override
     public String toString() {
-        return "GeminiProperties{model='%s', baseUrl='%s', timeoutMs=%d, keyConfigured=%s}"
+        return "GroqProperties{model='%s', baseUrl='%s', timeoutMs=%d, keyConfigured=%s}"
                 .formatted(model, baseUrl, timeoutMs, hasApiKey());
     }
 }

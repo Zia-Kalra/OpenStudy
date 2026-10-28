@@ -19,10 +19,10 @@ public class StudentDashboardController {
         addCurrentUser(model, session);
         model.addAttribute("activePage", "dashboard");
         model.addAttribute("stats", List.of(
-                Map.of("label", "Available Quizzes", "value", "3", "accent", "blue"),
-                Map.of("label", "Pending Assignments", "value", "2", "accent", "purple"),
-                Map.of("label", "Completed Tasks", "value", "5", "accent", "green"),
-                Map.of("label", "Average Score", "value", "76.4%", "accent", "orange")));
+                Map.of("label", "Available Quizzes", "value", "3", "accent", "purple", "icon", "quiz", "href", "/student/quizzes"),
+                Map.of("label", "Pending Assignments", "value", "2", "accent", "peach", "icon", "assignment", "href", "/student/assignments"),
+                Map.of("label", "Completed Tasks", "value", "5", "accent", "mint", "icon", "check-circle", "href", "/student/results"),
+                Map.of("label", "Average Score", "value", "76.4%", "accent", "lavender", "icon", "star", "href", "/student/performance")));
         model.addAttribute("recentQuizzes", List.of(
                 Map.of("title", "Java Basics Quiz", "meta", "20 Questions", "time", "Due: 20 Oct 2026", "status", "Ongoing"),
                 Map.of("title", "DBMS Concepts Quiz", "meta", "15 Questions", "time", "Due: 25 Oct 2026", "status", "Pending"),

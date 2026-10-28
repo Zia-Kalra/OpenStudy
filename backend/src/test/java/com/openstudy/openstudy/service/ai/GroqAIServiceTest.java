@@ -3,6 +3,7 @@ package com.openstudy.openstudy.service.ai;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPath;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
@@ -10,7 +11,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withUnauthorizedRequest;
 
 import tools.jackson.databind.ObjectMapper;
-import com.openstudy.openstudy.config.GeminiProperties;
+import com.openstudy.openstudy.config.GroqProperties;
 import com.openstudy.openstudy.dto.MCQGenerationRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,30 +20,30 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
-class GeminiAIServiceTest {
+class GroqAIServiceTest {
 
     private MockRestServiceServer server;
-    private GeminiAIService service;
-    private GeminiProperties properties;
+    private GroqAIService service;
+    private GroqProperties properties;
 
     @BeforeEach
     void setUp() {
-        properties = new GeminiProperties();
+        properties = new GroqProperties();
         properties.setApiKey("test-key");
-        properties.setModel("gemini-3.8-flash");
-        RestClient.Builder builder = RestClient.builder().baseUrl("https://generativelanguage.googleapis.com/v1beta");
+        properties.setModel("llama-3.3-70b-versatile");
+        RestClient.Builder builder = RestClient.builder().baseUrl("https://api.groq.com/openai/v1");
         server = MockRestServiceServer.bindTo(builder).build();
-        service = new GeminiAIService(
+        service = new GroqAIService(
                 builder.build(),
                 properties,
-                new GeminiJsonParser(new ObjectMapper()),
+                new GroqJsonParser(new ObjectMapper()),
                 new AiResponseValidator());
     }
 
     @Test
     void missingApiKeyFailsBeforeHttpCall() {
         properties.setApiKey(" ");
-        assertThatThrownBy(() -> service.callGemini("prompt"))
+        assertThatThrownBy(() -> service.callGroq("prompt"))
                 .isInstanceOf(AiServiceException.class)
                 .extracting(ex -> ((AiServiceException) ex).getErrorCode())
                 .isEqualTo(AiErrorCode.MISSING_API_KEY);
@@ -50,12 +51,12 @@ class GeminiAIServiceTest {
 
     @Test
     void invalidApiKeyMapsToDedicatedError() {
-        server.expect(requestTo("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent"))
+        server.expect(requestTo("https://api.groq.com/openai/v1/chat/completions"))
                 .andExpect(method(HttpMethod.POST))
-                .andExpect(header("x-goog-api-key", "test-key"))
+                .andExpect(header("Authorization", "Bearer test-key"))
                 .andRespond(withUnauthorizedRequest());
 
-        assertThatThrownBy(() -> service.callGemini("prompt"))
+        assertThatThrownBy(() -> service.callGroq("prompt"))
                 .isInstanceOf(AiServiceException.class)
                 .extracting(ex -> ((AiServiceException) ex).getErrorCode())
                 .isEqualTo(AiErrorCode.INVALID_API_KEY);
@@ -64,24 +65,25 @@ class GeminiAIServiceTest {
 
     @Test
     void successfulMcqResponseIsValidated() {
-        String geminiBody = """
+        String groqBody = """
                 {
-                  "candidates": [
+                  "choices": [
                     {
-                      "finishReason": "STOP",
-                      "content": {
-                        "parts": [
-                          {
-                            "text": "{\\"questions\\":[{\\"questionText\\":\\"What is O(n)?\\",\\"options\\":[\\"Linear\\",\\"Constant\\",\\"Log\\",\\"Quadratic\\"],\\"correctOption\\":\\"Linear\\",\\"explanation\\":\\"Linear scan\\",\\"difficulty\\":\\"EASY\\"}]}"
-                          }
-                        ]
+                      "index": 0,
+                      "finish_reason": "stop",
+                      "message": {
+                        "role": "assistant",
+                        "content": "{\\"questions\\":[{\\"questionText\\":\\"What is O(n)?\\",\\"options\\":[\\"Linear\\",\\"Constant\\",\\"Log\\",\\"Quadratic\\"],\\"correctOption\\":\\"Linear\\",\\"explanation\\":\\"Linear scan\\",\\"difficulty\\":\\"EASY\\"}]}"
                       }
                     }
                   ]
                 }
                 """;
-        server.expect(requestTo("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent"))
-                .andRespond(withSuccess(geminiBody, MediaType.APPLICATION_JSON));
+        server.expect(requestTo("https://api.groq.com/openai/v1/chat/completions"))
+                .andExpect(jsonPath("$.model").value("llama-3.3-70b-versatile"))
+                .andExpect(jsonPath("$.response_format.type").value("json_object"))
+                .andExpect(jsonPath("$.messages[0].role").value("system"))
+                .andRespond(withSuccess(groqBody, MediaType.APPLICATION_JSON));
 
         MCQGenerationRequest request = new MCQGenerationRequest();
         request.setSubject("Algorithms");
@@ -93,16 +95,16 @@ class GeminiAIServiceTest {
 
         assertThat(questions).hasSize(1);
         assertThat(questions.get(0).getCorrectOption()).isEqualTo("Linear");
-        assertThat(questions.get(0).getSource()).isEqualTo(AiResponseValidator.SOURCE_GEMINI);
+        assertThat(questions.get(0).getSource()).isEqualTo(AiResponseValidator.SOURCE_GROQ);
         server.verify();
     }
 
     @Test
     void serverErrorIsMapped() {
-        server.expect(requestTo("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent"))
+        server.expect(requestTo("https://api.groq.com/openai/v1/chat/completions"))
                 .andRespond(withServerError());
 
-        assertThatThrownBy(() -> service.callGemini("prompt"))
+        assertThatThrownBy(() -> service.callGroq("prompt"))
                 .isInstanceOf(AiServiceException.class)
                 .extracting(ex -> ((AiServiceException) ex).getErrorCode())
                 .isEqualTo(AiErrorCode.NETWORK_FAILURE);
@@ -112,9 +114,9 @@ class GeminiAIServiceTest {
     private void respondWithPayload(java.util.Map<String, Object> payload) {
         var mapper = new ObjectMapper();
         String text = mapper.writeValueAsString(payload);
-        String body = mapper.writeValueAsString(java.util.Map.of("candidates", java.util.List.of(
-                java.util.Map.of("finishReason", "STOP", "content", java.util.Map.of("parts", java.util.List.of(java.util.Map.of("text", text)))))));
-        server.expect(requestTo("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent"))
+        String body = mapper.writeValueAsString(java.util.Map.of("choices", java.util.List.of(
+                java.util.Map.of("finish_reason", "stop", "message", java.util.Map.of("role", "assistant", "content", text)))));
+        server.expect(requestTo("https://api.groq.com/openai/v1/chat/completions"))
                 .andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
     }
 
@@ -125,7 +127,7 @@ class GeminiAIServiceTest {
         var result = service.evaluateAssignmentAnswer(AiRequestValidationTest.evaluation());
         assertThat(result.getSuggestedScore()).isEqualTo(10);
         assertThat(result.isScoreAdjusted()).isTrue();
-        assertThat(result.getSource()).isEqualTo("GEMINI");
+        assertThat(result.getSource()).isEqualTo("GROQ");
         assertThat(result.getTeacherAuthorityNote()).contains("teacher retains final grading authority");
         server.verify();
     }
@@ -143,10 +145,10 @@ class GeminiAIServiceTest {
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.CsvSource({"429,RATE_LIMITED", "408,TIMEOUT", "400,UNEXPECTED_RESPONSE"})
     void mapsHttpErrorsWithoutExposingUpstreamBody(int status, AiErrorCode expected) {
-        server.expect(requestTo("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent"))
+        server.expect(requestTo("https://api.groq.com/openai/v1/chat/completions"))
                 .andRespond(org.springframework.test.web.client.response.MockRestResponseCreators
                         .withStatus(org.springframework.http.HttpStatus.valueOf(status)).body("PRIVATE_RESPONSE_MARKER"));
-        assertThatThrownBy(() -> service.callGemini("prompt"))
+        assertThatThrownBy(() -> service.callGroq("prompt"))
                 .isInstanceOf(AiServiceException.class).hasNoCause()
                 .extracting(ex -> ((AiServiceException) ex).getErrorCode()).isEqualTo(expected);
         server.verify();
@@ -154,15 +156,15 @@ class GeminiAIServiceTest {
 
     @Test
     void mapsSocketTimeoutAndNetworkErrors() {
-        server.expect(requestTo("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent"))
+        server.expect(requestTo("https://api.groq.com/openai/v1/chat/completions"))
                 .andRespond(org.springframework.test.web.client.response.MockRestResponseCreators
                         .withException(new java.net.SocketTimeoutException("PRIVATE_RESPONSE_MARKER")));
-        server.expect(requestTo("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent"))
+        server.expect(requestTo("https://api.groq.com/openai/v1/chat/completions"))
                 .andRespond(org.springframework.test.web.client.response.MockRestResponseCreators
                         .withException(new java.io.IOException("PRIVATE_RESPONSE_MARKER")));
-        assertThatThrownBy(() -> service.callGemini("prompt")).isInstanceOf(AiServiceException.class).hasNoCause()
+        assertThatThrownBy(() -> service.callGroq("prompt")).isInstanceOf(AiServiceException.class).hasNoCause()
                 .extracting(ex -> ((AiServiceException) ex).getErrorCode()).isEqualTo(AiErrorCode.TIMEOUT);
-        assertThatThrownBy(() -> service.callGemini("prompt")).isInstanceOf(AiServiceException.class).hasNoCause()
+        assertThatThrownBy(() -> service.callGroq("prompt")).isInstanceOf(AiServiceException.class).hasNoCause()
                 .extracting(ex -> ((AiServiceException) ex).getErrorCode()).isEqualTo(AiErrorCode.NETWORK_FAILURE);
         server.verify();
     }

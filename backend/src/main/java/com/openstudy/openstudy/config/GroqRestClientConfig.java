@@ -7,10 +7,10 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
 @Configuration
-public class GeminiRestClientConfig {
+public class GroqRestClientConfig {
 
     @Bean
-    RestClient geminiRestClient(GeminiProperties properties) {
+    RestClient groqRestClient(GroqProperties properties) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(Duration.ofSeconds(10));
         factory.setReadTimeout(Duration.ofMillis(Math.max(properties.getTimeoutMs(), 1000)));

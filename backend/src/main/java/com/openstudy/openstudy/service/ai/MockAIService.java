@@ -13,7 +13,7 @@ import org.springframework.stereotype.Service;
 
 /**
  * Local-development stand-in selected explicitly by openstudy.ai.provider=mock.
- * Responses are explicitly labeled as placeholders and must not be treated as Gemini output.
+ * Responses are explicitly labeled as placeholders and must not be treated as Groq output.
  */
 @Service
 @ConditionalOnProperty(name = "openstudy.ai.provider", havingValue = "mock", matchIfMissing = true)
@@ -30,7 +30,7 @@ public class MockAIService implements AIService {
     @Override
     public List<GeneratedMCQDTO> generateMCQs(MCQGenerationRequest request) {
         AiRequestValidator.validate(request);
-        log.info("AIService mock provider in use. Returning labeled placeholders, not Gemini output.");
+        log.info("AIService mock provider in use. Returning labeled placeholders, not Groq output.");
         int count = request.getNumberOfQuestions();
         List<GeneratedMCQDTO> generated = new ArrayList<>();
         for (int i = 1; i <= count; i++) {
@@ -50,15 +50,15 @@ public class MockAIService implements AIService {
     @Override
     public AssignmentEvaluationResult evaluateAssignmentAnswer(AssignmentEvaluationRequest request) {
         AiRequestValidator.validate(request);
-        log.info("AIService mock provider in use. Returning labeled placeholders, not Gemini output.");
+        log.info("AIService mock provider in use. Returning labeled placeholders, not Groq output.");
         String feedback = validator.demoPrefix()
-                + " Local stub feedback for wiring Member 3. Gemini was not called.";
+                + " Local stub feedback for wiring Member 3. Groq was not called.";
         return validator.validateEvaluation(
                 request,
                 0,
                 feedback,
-                List.of(validator.demoPrefix() + " Strengths are not available without Gemini."),
-                List.of("Configure GEMINI_API_KEY and set openstudy.ai.provider=gemini for live suggestions."),
+                List.of(validator.demoPrefix() + " Strengths are not available without Groq."),
+                List.of("Configure GROQ_API_KEY and set openstudy.ai.provider=groq for live suggestions."),
                 AiResponseValidator.SOURCE_MOCK);
     }
 }

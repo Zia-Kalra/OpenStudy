@@ -1,81 +1,66 @@
 <%@ page contentType="text/html;charset=UTF-8" language="java" %>
 <%@ taglib prefix="c" uri="jakarta.tags.core" %>
+<%@ taglib prefix="fn" uri="jakarta.tags.functions" %>
+<%@ taglib prefix="os" tagdir="/WEB-INF/tags" %>
+<c:set var="base" value="${fn:escapeXml(pageContext.request.contextPath)}"/>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Results</title>
-    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/student-dashboard.css">
+    <title>Results · OpenStudy</title>
+    <link rel="stylesheet" href="${base}/css/openstudy.css">
 </head>
 <body>
-<div class="student-wrapper">
-    <aside class="student-sidebar" id="studentSidebar">
-        <div class="brand-block">
-            <div class="brand-icon">OS</div>
-            <div class="brand-meta">
-                <strong>OpenStudy</strong>
-            </div>
+<jsp:include page="fragments/topnav.jsp"/>
+
+<main class="os-page">
+    <section class="os-hero os-hero--compact">
+        <div>
+            <h1>My Results</h1>
+            <p class="os-hero__sub">View your quiz and assignment results</p>
         </div>
-        <nav class="student-side-nav" aria-label="Student navigation">
-            <a href="${pageContext.request.contextPath}/student/dashboard"><span class="side-icon">⌂</span> Dashboard</a>
-            <a href="${pageContext.request.contextPath}/student/quizzes"><span class="side-icon">▣</span> Quizzes</a>
-            <a href="${pageContext.request.contextPath}/student/assignments"><span class="side-icon">✎</span> Assignments</a>
-            <a class="active" href="${pageContext.request.contextPath}/student/results"><span class="side-icon">▤</span> Results</a>
-            <a href="${pageContext.request.contextPath}/student/performance"><span class="side-icon">◎</span> Performance</a>
-            <a href="${pageContext.request.contextPath}/student/profile"><span class="side-icon">☺</span> Profile</a>
-            <a href="${pageContext.request.contextPath}/logout"><span class="side-icon">↩</span> Logout</a>
-        </nav>
-    </aside>
+    </section>
 
-    <main class="student-main">
-        <header class="student-topbar">
-            <button class="icon-button sidebar-toggle" id="studentSidebarToggle" aria-label="Toggle navigation" data-action="toggle-sidebar">☰</button>
-            <div class="searchbox">
-                <span>⌕</span>
-                <input type="text" value="Search results..." aria-label="Search results" />
-            </div>
-            <div class="topbar-actions">
-                <button class="icon-button" aria-label="Flag item" data-action="toggle-flag">⚑</button>
-                <div class="user-chip">
-                    <div class="avatar-circle">${currentUserInitial}</div>
-                    <div class="user-name">${currentUserName}</div>
-                </div>
-            </div>
-        </header>
-
-        <div class="content-shell">
-            <section class="page-header">
-                <h1>My Results</h1>
-                <p>View your quiz and assignment results</p>
-            </section>
-            <div class="panel">
-                <table class="student-table">
-                    <thead>
-                    <tr>
-                        <th>Title</th>
-                        <th>Type</th>
-                        <th>Marks</th>
-                        <th>Status</th>
-                        <th>Date</th>
+    <section class="os-panel os-panel--padded tone-mint" aria-labelledby="resultsTitle">
+        <div class="os-panel__head">
+            <span class="os-panel__icon"><os:icon name="results"/></span>
+            <h2 id="resultsTitle">Graded Work</h2>
+        </div>
+        <div class="os-table-wrap">
+            <table class="os-table">
+                <thead>
+                <tr>
+                    <th scope="col">Title</th>
+                    <th scope="col">Type</th>
+                    <th scope="col">Marks</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Date</th>
+                </tr>
+                </thead>
+                <tbody>
+                <c:forEach var="result" items="${results}">
+                    <tr data-os-searchable>
+                        <td>
+                            <span class="os-table__title ${result.type == 'Quiz' ? 'tone-purple' : 'tone-peach'}">
+                                <span class="os-tile" aria-hidden="true"><c:out value="${fn:substring(result.type, 0, 1)}"/></span>
+                                <c:out value="${result.title}"/>
+                            </span>
+                        </td>
+                        <td><c:out value="${result.type}"/></td>
+                        <td class="os-score"><c:out value="${result.score}"/></td>
+                        <td><os:pill status="${result.status}"/></td>
+                        <td><c:out value="${result.date}"/></td>
                     </tr>
-                    </thead>
-                    <tbody>
-                    <c:forEach var="result" items="${results}">
-                        <tr>
-                            <td>${result.title}</td>
-                            <td>${result.type}</td>
-                            <td>${result.score}</td>
-                            <td><span class="pill ${result.status == 'Passed' ? 'green' : 'gray'}">${result.status}</span></td>
-                            <td>${result.date}</td>
-                        </tr>
-                    </c:forEach>
-                    </tbody>
-                </table>
-            </div>
+                </c:forEach>
+                </tbody>
+            </table>
         </div>
-    </main>
-</div>
-<script src="${pageContext.request.contextPath}/js/student-dashboard.js"></script>
+        <c:if test="${empty results}">
+            <div class="os-empty"><strong>No results yet</strong>Your marks appear here once work is graded.</div>
+        </c:if>
+    </section>
+</main>
+<script src="${base}/js/student-dashboard.js"></script>
 </body>
 </html>
