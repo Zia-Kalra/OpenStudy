@@ -32,10 +32,6 @@
     <main class="student-main">
         <header class="student-topbar">
             <button class="icon-button sidebar-toggle" id="studentSidebarToggle" aria-label="Toggle navigation" data-action="toggle-sidebar">☰</button>
-            <div class="searchbox">
-                <span>⌕</span>
-                <input type="text" value="Search quizzes, assignments..." aria-label="Search" />
-            </div>
             <div class="topbar-actions">
                 <button class="icon-button" aria-label="Flag item" data-action="toggle-flag">⚑</button>
                 <div class="user-chip">
@@ -108,6 +104,9 @@
                                 <span class="pill purple">${assignment.status}</span>
                             </li>
                         </c:forEach>
+                        <c:if test="${empty recentAssignments}">
+                            <li class="empty-state">No assignments due in the next or past month.</li>
+                        </c:if>
                     </ul>
                 </section>
             </div>

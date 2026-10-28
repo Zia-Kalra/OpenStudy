@@ -6,6 +6,8 @@ import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.util.Locale;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Profile;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -30,11 +32,20 @@ public class DatabaseAuthService implements AuthService {
     private final PasswordResetTokenService resetTokens;
     private final String fromAddress;
 
+    @Autowired
     public DatabaseAuthService(
             JdbcTemplate jdbcTemplate,
-            JavaMailSender mailSender,
+            ObjectProvider<JavaMailSender> mailSenderProvider,
             PasswordResetTokenService resetTokens,
             @Value("${spring.mail.username:}") String fromAddress) {
+        this.jdbcTemplate = jdbcTemplate;
+        this.mailSender = mailSenderProvider.getIfAvailable();
+        this.resetTokens = resetTokens;
+        this.fromAddress = fromAddress;
+    }
+
+    DatabaseAuthService(JdbcTemplate jdbcTemplate, JavaMailSender mailSender,
+            PasswordResetTokenService resetTokens, String fromAddress) {
         this.jdbcTemplate = jdbcTemplate;
         this.mailSender = mailSender;
         this.resetTokens = resetTokens;
@@ -99,6 +110,9 @@ public class DatabaseAuthService implements AuthService {
 
     @Override
     public void sendPasswordReset(String email, String resetUrl) {
+        if (mailSender == null) {
+            throw new IllegalStateException("Password reset email is unavailable because SMTP is not configured.");
+        }
         User user = queryUser(
                 "SELECT " + USER_COLUMNS + " FROM users WHERE email = ? AND account_status = 'ACTIVE'",
                 normalizeEmail(email));

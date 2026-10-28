@@ -15,7 +15,14 @@ public record QuestionBankQuestionRequest(
         @NotNull QuestionType questionType,
         @NotNull @DecimalMin("0.01") BigDecimal points,
         @NotNull Difficulty difficulty,
-        @NotEmpty @Size(min = 2, max = 6) List<@Valid QuestionBankOptionRequest> options) {
+        @NotEmpty @Size(min = 2, max = 6) List<@Valid QuestionBankOptionRequest> options,
+        @NotNull Long subjectId,
+        @jakarta.validation.constraints.Size(max = 200) String topic) {
+
+    public QuestionBankQuestionRequest(String questionText, QuestionType questionType,
+            BigDecimal points, Difficulty difficulty, List<QuestionBankOptionRequest> options) {
+        this(questionText, questionType, points, difficulty, options, 0L, "");
+    }
 
     public enum QuestionType {
         SINGLE_CHOICE,
