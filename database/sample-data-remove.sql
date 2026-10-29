@@ -1,0 +1,23 @@
+-- Removes exactly the rows created by database/sample-data.sql (sample users and SAMPLE-DATA subjects).
+START TRANSACTION;
+SET @teacher := (SELECT user_id FROM users WHERE email='teacher@sample.openstudy');
+CREATE TEMPORARY TABLE sample_users AS SELECT user_id FROM users WHERE email LIKE '%@sample.openstudy';
+CREATE TEMPORARY TABLE sample_subjects AS SELECT subject_id FROM subjects WHERE description='SAMPLE-DATA';
+DELETE a FROM quiz_answers a JOIN quiz_attempts t ON t.attempt_id=a.attempt_id WHERE t.student_user_id IN (SELECT user_id FROM sample_users);
+DELETE FROM quiz_attempts WHERE student_user_id IN (SELECT user_id FROM sample_users);
+DELETE o FROM quiz_options o JOIN quiz_questions qq ON qq.question_id=o.question_id JOIN quizzes z ON z.quiz_id=qq.quiz_id WHERE z.created_by IN (SELECT user_id FROM sample_users);
+DELETE qq FROM quiz_questions qq JOIN quizzes z ON z.quiz_id=qq.quiz_id WHERE z.created_by IN (SELECT user_id FROM sample_users);
+DELETE FROM quizzes WHERE created_by IN (SELECT user_id FROM sample_users);
+DELETE aa FROM assignment_answers aa JOIN assignment_submissions s ON s.submission_id=aa.submission_id WHERE s.student_user_id IN (SELECT user_id FROM sample_users);
+DELETE FROM assignment_submissions WHERE student_user_id IN (SELECT user_id FROM sample_users);
+DELETE q FROM assignment_questions q JOIN assignments a ON a.assignment_id=q.assignment_id WHERE a.created_by IN (SELECT user_id FROM sample_users);
+DELETE FROM assignments WHERE created_by IN (SELECT user_id FROM sample_users);
+DELETE o FROM question_bank_options o JOIN question_bank_questions b ON b.bank_question_id=o.bank_question_id WHERE b.created_by IN (SELECT user_id FROM sample_users);
+DELETE FROM question_bank_questions WHERE created_by IN (SELECT user_id FROM sample_users);
+DELETE FROM subject_enrollments WHERE student_user_id IN (SELECT user_id FROM sample_users);
+DELETE FROM subject_teachers WHERE teacher_id IN (SELECT user_id FROM sample_users);
+DELETE FROM subjects WHERE subject_id IN (SELECT subject_id FROM sample_subjects);
+DELETE FROM users WHERE user_id IN (SELECT user_id FROM sample_users);
+DROP TEMPORARY TABLE sample_users;
+DROP TEMPORARY TABLE sample_subjects;
+COMMIT;

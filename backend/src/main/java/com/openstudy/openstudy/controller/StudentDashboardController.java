@@ -90,9 +90,9 @@ public class StudentDashboardController {
                     + "CASE WHEN EXISTS (SELECT 1 FROM quiz_attempts a WHERE a.quiz_id=q.quiz_id AND a.student_user_id=? "
                     + "AND a.status IN ('SUBMITTED','GRADED')) THEN 'Completed' "
                     + "WHEN EXISTS (SELECT 1 FROM quiz_attempts a WHERE a.quiz_id=q.quiz_id AND a.student_user_id=? "
-                    + "AND a.status='IN_PROGRESS') THEN 'In Progress' ELSE 'Pending' END quiz_status "
+                    + "AND a.status='IN_PROGRESS') THEN 'In Progress' "
+                    + "WHEN q.available_from>? THEN 'Upcoming' ELSE 'Pending' END quiz_status "
                     + "FROM quizzes q WHERE q.status='PUBLISHED' "
-                    + "AND (q.available_from IS NULL OR q.available_from<=?) "
                     + "AND (q.available_until IS NULL OR q.available_until>=?) "
                     + "ORDER BY q.created_at DESC LIMIT 4",
                 studentId, studentId, now, now);

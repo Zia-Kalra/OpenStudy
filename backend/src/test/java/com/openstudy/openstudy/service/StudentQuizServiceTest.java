@@ -54,7 +54,9 @@ class StudentQuizServiceTest {
         assertTrue(listingSql.contains("q.status='PUBLISHED'"));
         assertTrue(listingSql.contains("JOIN subjects s ON s.subject_id=q.subject_id"));
         assertFalse(listingSql.contains("subject_enrollments"));
-        assertTrue(listingSql.contains("q.available_from<=NOW()"));
+        // Published quizzes that have not opened yet are listed as upcoming; only expired ones are excluded.
+        assertTrue(listingSql.contains("q.available_from>NOW()) upcoming"));
+        assertFalse(listingSql.contains("q.available_from<=NOW()"));
         assertTrue(listingSql.contains("q.available_until>=NOW()"));
         assertTrue(listingSql.contains("question_bank_questions"));
         String diagnosticSql = sql.getAllValues().get(1);

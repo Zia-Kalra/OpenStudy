@@ -86,10 +86,12 @@
           const item = document.createElement("span"); item.textContent = value; meta.append(item);
         });
         const supported = ![false, 0, "0"].includes(quiz.supported_for_attempt);
+        const upcoming = [true, 1, "1"].includes(quiz.upcoming);
         const resume = attempts(quiz).some((a) => a.status === "IN_PROGRESS");
         const start = document.createElement("button"); start.type = "button"; start.className = "quiz-button";
-        start.textContent = supported ? resume ? "Resume Quiz" : "Start Quiz" : "Question type unavailable";
-        start.disabled = !supported; start.addEventListener("click", () => openPreview(quiz));
+        start.textContent = upcoming ? `Opens ${formatDate(quiz.available_from)}`
+          : supported ? resume ? "Resume Quiz" : "Start Quiz" : "Question type unavailable";
+        start.disabled = !supported || upcoming; start.addEventListener("click", () => openPreview(quiz));
         actions.append(start); card.append(title, subject, instructions, meta, actions); list.append(card);
       });
     };

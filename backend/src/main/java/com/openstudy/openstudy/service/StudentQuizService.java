@@ -37,10 +37,10 @@ public class StudentQuizService {
                 + "(SELECT COALESCE(SUM(qq.points),0) FROM quiz_questions qq WHERE qq.quiz_id=q.quiz_id) total_marks, "
                 + "NOT EXISTS (SELECT 1 FROM quiz_questions qq "
                 + "JOIN question_bank_questions b ON b.bank_question_id=qq.bank_question_id "
-                + "WHERE qq.quiz_id=q.quiz_id AND b.question_type NOT IN ('SINGLE_CHOICE','MULTIPLE_CHOICE')) supported_for_attempt "
+                + "WHERE qq.quiz_id=q.quiz_id AND b.question_type NOT IN ('SINGLE_CHOICE','MULTIPLE_CHOICE')) supported_for_attempt, "
+                + "(q.available_from IS NOT NULL AND q.available_from>NOW()) upcoming "
                 + "FROM quizzes q JOIN subjects s ON s.subject_id=q.subject_id "
                 + "WHERE q.status='PUBLISHED' "
-                + "AND (q.available_from IS NULL OR q.available_from<=NOW()) "
                 + "AND (q.available_until IS NULL OR q.available_until>=NOW()) "
                 + "ORDER BY q.available_from, q.created_at DESC");
         try {

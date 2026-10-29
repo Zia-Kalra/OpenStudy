@@ -13,7 +13,7 @@ public class AnalyticsProperties {
     private final DevIdentity devIdentity = new DevIdentity();
 
     /** HTTP session attribute that Member 1's login stores the authenticated User under. */
-    private String sessionAttribute = "currentUser";
+    private String sessionAttribute = "loggedInUser";
     /** Percentage at or above which a result counts as a pass (used for pass rate and insights). */
     private double passMark = 50.0;
     /** Minimum completed assessments before any insight or recommendation is produced. */

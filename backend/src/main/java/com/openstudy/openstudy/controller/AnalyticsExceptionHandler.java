@@ -5,6 +5,8 @@ import com.openstudy.openstudy.service.analytics.AnalyticsAccessException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -13,6 +15,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /** Maps analytics failures to HTTP codes without leaking SQL, stack traces or student data. */
 @RestControllerAdvice(assignableTypes = AnalyticsApiController.class)
+// Must run before the global handler, which would turn access errors into generic 500 pages.
+@Order(Ordered.HIGHEST_PRECEDENCE)
 @Profile("!mock")
 public class AnalyticsExceptionHandler {
 
