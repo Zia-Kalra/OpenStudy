@@ -37,13 +37,13 @@
             <span class="os-stat__icon"><os:icon name="quiz"/></span>
             <span class="os-stat__label">Total Quizzes</span>
             <span class="os-stat__value"><c:out value="${dashboard.stats.totalQuizzes}"/></span>
-            <c:if test="${dashboard.stats.noQuizzes}"><span class="os-stat__note">No quizzes yet. Member 2 will supply live counts.</span></c:if>
+            <c:if test="${dashboard.stats.noQuizzes}"><span class="os-stat__note">No quizzes yet.</span></c:if>
         </a>
         <a class="os-stat tone-peach" href="${base}${fn:escapeXml(nav.assignments)}">
             <span class="os-stat__icon"><os:icon name="assignment"/></span>
             <span class="os-stat__label">Total Assignments</span>
             <span class="os-stat__value"><c:out value="${dashboard.stats.totalAssignments}"/></span>
-            <c:if test="${dashboard.stats.noAssignments}"><span class="os-stat__note">No assignments yet. Member 3 will supply live counts.</span></c:if>
+            <c:if test="${dashboard.stats.noAssignments}"><span class="os-stat__note">No assignments yet.</span></c:if>
         </a>
         <a class="os-stat tone-mint" href="${base}${fn:escapeXml(nav.analytics)}">
             <span class="os-stat__icon"><os:icon name="users"/></span>
@@ -94,7 +94,7 @@
             </div>
             <c:choose>
                 <c:when test="${dashboard.emptyDeadlines}">
-                    <div class="os-empty"><strong>No upcoming deadlines</strong>Quiz and assignment due dates from Members 2 and 3 will be listed here.</div>
+                    <div class="os-empty"><strong>No upcoming deadlines</strong>Due dates for your published quizzes and assignments will be listed here.</div>
                 </c:when>
                 <c:otherwise>
                     <ul class="os-list">

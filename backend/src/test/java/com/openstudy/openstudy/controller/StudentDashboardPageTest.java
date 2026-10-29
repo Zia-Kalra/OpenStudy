@@ -1,5 +1,7 @@
 package com.openstudy.openstudy.controller;
 
+import com.openstudy.openstudy.MockJdbcTestConfiguration;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.net.URI;
@@ -9,12 +11,16 @@ import java.net.http.HttpResponse;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
         "server.address=127.0.0.1"
 })
 @ActiveProfiles("mock")
+
+@Import(MockJdbcTestConfiguration.class)
+
 class StudentDashboardPageTest {
     @Value("${local.server.port}")
     private int port;
@@ -53,10 +59,10 @@ class StudentDashboardPageTest {
         assertThat(loginPage.body()).contains("/forgot-password", "/signup").doesNotContain("Contact your admin", "student123");
         var signupPage = get("/signup");
         assertThat(signupPage.statusCode()).isEqualTo(200);
-        assertThat(signupPage.body()).contains("Create Student Account", "name=\"fullName\"", "name=\"confirmPassword\"");
+        assertThat(signupPage.body()).contains("Create Student account", "name=\"fullName\"", "name=\"confirmPassword\"");
         var forgotPasswordPage = get("/forgot-password");
         assertThat(forgotPasswordPage.statusCode()).isEqualTo(200);
-        assertThat(forgotPasswordPage.body()).contains("Send Reset Link");
+        assertThat(forgotPasswordPage.body()).contains("Send reset link");
         var invalidResetPage = get("/reset-password?token=invalid");
         assertThat(invalidResetPage.statusCode()).isEqualTo(200);
         assertThat(invalidResetPage.body()).contains("This reset link is invalid or has expired");
@@ -65,7 +71,7 @@ class StudentDashboardPageTest {
         assertThat(get("/student/login").statusCode()).isEqualTo(200);
         var dashboard = authenticatedGet("/student/dashboard", sessionCookie);
         assertThat(dashboard.statusCode()).isEqualTo(200);
-        assertThat(dashboard.body()).contains("Welcome Back, Student User!");
+        assertThat(dashboard.body()).contains("Good to see you,", "Student User");
 
         HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
         HttpResponse<String> update = client.send(
@@ -82,12 +88,17 @@ class StudentDashboardPageTest {
         assertThat(profile.statusCode()).isEqualTo(200);
         assertThat(profile.body()).contains(
             "MY-COLLEGE-ID-7", "Updated Student", "updated@example.com", "Account ID (system-generated)",
-            "id=\"profileEditForm\"", "Save Changes");
+            "id=\"profileEditForm\"", "Save changes");
         assertThat(profile.body()).doesNotContain("23CS101", "ABC Engineering College");
-        assertThat(authenticatedGet("/student/quizzes", sessionCookie).statusCode()).isEqualTo(200);
+        var availableQuizzes = authenticatedGet("/student/quizzes", sessionCookie);
+        assertThat(availableQuizzes.statusCode()).isEqualTo(200);
+        assertThat(availableQuizzes.body()).contains(
+                "My Quizzes", "id=\"pendingQuizzesTab\"", "id=\"attemptedQuizzesTab\"",
+                "id=\"quizStartDialog\"", "id=\"quizList\"", "student-quiz.js")
+                .doesNotContain("Java Basics Quiz", "DBMS Concepts Quiz");
         assertThat(authenticatedGet("/student/assignments", sessionCookie).statusCode()).isEqualTo(200);
         assertThat(authenticatedGet("/student/results", sessionCookie).statusCode()).isEqualTo(200);
-        assertThat(authenticatedGet("/student/performance", sessionCookie).statusCode()).isEqualTo(200);
+        assertThat(authenticatedGet("/student/performance", sessionCookie).statusCode()).isEqualTo(302);
         assertThat(get("/css/student-dashboard.css").statusCode()).isEqualTo(200);
         assertThat(get("/js/student-dashboard.js").statusCode()).isEqualTo(200);
     }

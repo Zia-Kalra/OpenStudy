@@ -11,6 +11,9 @@ public record QuestionBankQuestionResponse(
         String difficulty,
         String source,
         String approvalStatus,
+        Long subjectId,
+        String subjectName,
+        String topic,
         List<Option> options) {
 
     public record Option(long bankOptionId, String text, boolean correct, int position) {

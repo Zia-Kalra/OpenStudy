@@ -1,2 +1,78 @@
-/* Superseded by openstudy.css (shared design system). Kept so older pages that link this file still get the current styles. */
+/* Teacher module pages (quizzes, question bank, assignments, submissions, analytics, errors).
+   They share the OpenStudy theme from openstudy.css; navigation lives in the top bar. */
 @import url("openstudy.css");
+
+:root { --navy-soft: var(--ink); }
+
+/* Page frame: legacy "layout > layout-main > content" markup renders like .os-page. */
+.layout { display: block; }
+.teacher-sidebar { display: none; }
+.layout-main { display: block; min-width: 0; }
+.content { max-width: var(--page-max); margin: 0 auto; padding: 32px var(--gutter) 40px; display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.content h1 { font-size: 1.6rem; }
+.content h2 { font-size: 1.15rem; }
+.content > p, .content .panel-subtitle { color: var(--muted); }
+.eyebrow { margin: 0 0 4px; color: var(--muted); font-size: 0.8rem; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; }
+
+/* Surfaces */
+.panel, .welcome-panel, .stat-card, .action-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-sm); }
+.panel { padding: 18px 20px; min-width: 0; }
+.panel-header h3 { font-size: 1rem; margin: 0 0 4px; }
+.panel-header p { margin: 0 0 14px; color: var(--muted); font-size: 0.9rem; }
+.banner { padding: 10px 14px; border: 1px solid #e3ddfa; border-radius: var(--radius-sm); background: #faf8ff; color: var(--purple-strong); }
+.empty-state { padding: 24px 12px; text-align: center; color: var(--muted); border-radius: var(--radius-sm); background: var(--hover); }
+.empty-state h4 { margin: 0 0 6px; color: var(--ink); font-weight: 500; }
+time { color: var(--muted); font-size: 0.85rem; }
+
+/* Controls shared by every module page */
+.content input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.content select, .content textarea,
+.qb-page input:not([type="checkbox"]):not([type="radio"]), .qb-page select, .qb-page textarea {
+    border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: #fff; color: var(--ink);
+}
+.content input:focus, .content select:focus, .content textarea:focus,
+.qb-page input:focus, .qb-page select:focus, .qb-page textarea:focus {
+    outline: none; border-color: var(--purple); box-shadow: var(--ring);
+}
+.content button:focus-visible, .content a:focus-visible, .qb-page button:focus-visible, .qb-page a:focus-visible { outline: none; box-shadow: var(--ring); }
+.content input[type="checkbox"], .content input[type="radio"], .qb-page input[type="checkbox"], .qb-page input[type="radio"] { accent-color: var(--purple); }
+
+/* Buttons: any legacy primary/secondary/danger control follows the theme. */
+.primary-link, .assignment-create-button, .view-assignment-button {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px; margin-top: 0;
+    min-height: 34px; padding: 0 14px; border: 1px solid transparent; border-radius: var(--radius-sm);
+    background: var(--purple); color: #fff; font-weight: 500; font-size: 0.92rem; cursor: pointer;
+}
+.primary-link:hover, .assignment-create-button:hover, .view-assignment-button:hover { background: var(--purple-strong); color: #fff; filter: none; }
+a.primary-link.error-retry { background: #fff; color: var(--ink); border-color: var(--line-strong); }
+.light-link { color: var(--purple); font-weight: 500; }
+
+/* Status / placeholder / error panels */
+.placeholder-panel, .error-panel { max-width: 720px; }
+.error-panel .error-ref, .module-key { color: var(--muted); font-size: 0.88rem; }
+.error-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.os-chip, .placeholder-note { color: var(--muted); }
+
+/* Dashboard-style helpers some module pages still use */
+.stats-grid, .actions-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.stat-card { padding: 14px 16px; }
+.stat-card strong { display: block; margin: 4px 0; font-size: 1.6rem; font-weight: 600; color: var(--ink); }
+.stat-label { color: var(--muted); font-size: 0.88rem; }
+.action-card { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; color: var(--text); }
+.action-card:hover { border-color: var(--line-strong); }
+.two-column { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 16px; }
+.activity-list, .deadline-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+.activity-list li, .deadline-list li { display: flex; gap: 12px; padding: 11px 0; border-top: 1px solid var(--line); }
+.activity-type, .deadline-type { height: fit-content; padding: 2px 8px; border-radius: 999px; background: var(--purple-soft); color: var(--purple); font-size: 0.75rem; white-space: nowrap; }
+.activity-list p, .deadline-list p { margin: 2px 0; color: var(--muted); }
+
+.teacher-footer { max-width: var(--page-max); margin: 0 auto; padding: 0 var(--gutter) 28px; color: var(--faint); font-size: 0.8rem; }
+
+@media (max-width: 1000px) {
+    .stats-grid, .actions-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .two-column { grid-template-columns: 1fr; }
+}
+@media (max-width: 600px) {
+    .stats-grid, .actions-grid { grid-template-columns: 1fr; }
+    .content { padding: 20px var(--gutter) 32px; }
+}

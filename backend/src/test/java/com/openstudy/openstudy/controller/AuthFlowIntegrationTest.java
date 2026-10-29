@@ -1,5 +1,8 @@
 package com.openstudy.openstudy.controller;
 
+import com.openstudy.openstudy.MockJdbcTestConfiguration;
+import org.springframework.context.annotation.Import;
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
@@ -22,6 +25,8 @@ import org.springframework.test.web.servlet.MockMvc;
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("mock")
+@Import(MockJdbcTestConfiguration.class)
+
 class AuthFlowIntegrationTest {
 
     @Autowired
@@ -106,7 +111,7 @@ class AuthFlowIntegrationTest {
 
         MockHttpSession session = (MockHttpSession) result.getRequest().getSession(false);
 
-        for (String path : List.of("/student/quizzes", "/student/assignments", "/student/results", "/student/performance")) {
+        for (String path : List.of("/student/quizzes", "/student/assignments", "/student/results")) {
             mockMvc.perform(get(path).session(session))
                     .andExpect(status().isOk())
                     .andExpect(model().attribute("currentUserName", "Student User"))
