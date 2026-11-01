@@ -31,8 +31,8 @@
             <span class="owner-chip">M3</span>
         </a>
         <a class="${activePage == 'analytics' ? 'active' : ''}" href="${fn:escapeXml(pageContext.request.contextPath)}${fn:escapeXml(nav.analytics)}">
-            <span class="nav-icon">◎</span> Analytics
-            <span class="owner-chip">M4</span>
+            <span class="nav-icon">◎</span> Teacher Analytics
+            <span class="owner-chip">M5</span>
         </a>
         <a class="${activePage == 'profile' ? 'active' : ''}" href="${fn:escapeXml(pageContext.request.contextPath)}${fn:escapeXml(nav.profile)}">
             <span class="nav-icon">☺</span> Profile

@@ -107,9 +107,9 @@ public class TeacherDashboardService {
                 new QuickActionDTO(
                         "view-analytics",
                         "View Analytics",
-                        "Opens Member 4's analytics module when it is integrated.",
+                        "Compare assigned students, assessments, and class performance.",
                         moduleProperties.getAnalyticsPath(),
-                        "Member 4",
+                        "Member 5",
                         isPlaceholder(moduleProperties.getAnalyticsPath())));
     }
 

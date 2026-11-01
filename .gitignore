@@ -18,10 +18,76 @@ replay_pid*
 .mtj.tmp/
 
 # ==========================================
-# Aiven SSL certificate and Java truststore
+# Java / Maven build output
 # ==========================================
-backend/certs/*
+**/target/
 
-# Local VS Code launch settings can contain secrets.
+# ==========================================
+# Java package archives
+# ==========================================
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# ==========================================
+# Secrets and environment files
+# ==========================================
+.env
+.env.*
+# Explicit local backend credentials (templates below remain trackable).
+backend/.env
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
+application-local.properties
+application-local*.properties
+application-local*.yml
+application-local*.yaml
+application-secrets*.properties
+application-secrets*.yml
+application-secrets*.yaml
+
+# Private keys and certificates
+*.pem
+*.key
+*.p12
+*.pfx
+*.pkcs12
+*.keystore
+*.jceks
+*.ppk
+*.p8
+*.pk8
+*.pkcs8
+id_rsa
+id_ecdsa
+id_ed25519
+*.der
+*.crt
+*.cer
+*.jks
+*.truststore
+*.truststore.*
+backend/certs/
+
+# ==========================================
+# IDE files
+# ==========================================
+.vscode/
+.idea/
+*.iml
+
+# ==========================================
+# Operating system files
+# ==========================================
+.DS_Store
+Thumbs.db
+
+# Explicit protection for local launch credentials in either workspace layout.
 .vscode/launch.json
 backend/.vscode/launch.json

@@ -7,9 +7,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 @Component
 @Profile("!mock")
+@ConditionalOnProperty(name = "openstudy.assignments.expiry.enabled", havingValue = "true", matchIfMissing = true)
 public class AssignmentAttemptExpiryService {
     private static final Logger log = LoggerFactory.getLogger(AssignmentAttemptExpiryService.class);
     private final JdbcTemplate db;

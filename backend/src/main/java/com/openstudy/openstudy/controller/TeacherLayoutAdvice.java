@@ -7,7 +7,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ModelAttribute;
 
-@ControllerAdvice(assignableTypes = {TeacherDashboardController.class, TeacherPlaceholderController.class})
+@ControllerAdvice(assignableTypes = {TeacherDashboardController.class, TeacherPlaceholderController.class,
+        TeacherAnalyticsController.class, TeacherQuestionBankPageController.class, TeacherQuizPageController.class})
 public class TeacherLayoutAdvice {
 
     private final TeacherDashboardService teacherDashboardService;
