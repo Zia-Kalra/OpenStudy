@@ -27,8 +27,8 @@ public class GroqJsonParser {
 
     public String readText(JsonNode node, String field) {
         JsonNode value = node == null ? null : node.get(field);
-        if (value == null || !value.isTextual() || value.asText().isBlank()) throw invalid("Groq response was missing a required text field.");
-        return value.asText().strip();
+        if (value == null || !value.isTextual() || value.stringValue().isBlank()) throw invalid("Groq response was missing a required text field.");
+        return value.stringValue().strip();
     }
 
     public double readNumber(JsonNode node, String field) {
@@ -42,8 +42,8 @@ public class GroqJsonParser {
         if (array == null || !array.isArray() || array.size() > 20) throw invalid("Groq response was missing a valid list field.");
         List<String> values = new ArrayList<>();
         for (JsonNode item : array) {
-            if (!item.isTextual() || item.asText().isBlank()) throw invalid("Groq response contained an invalid list item.");
-            values.add(item.asText().strip());
+            if (!item.isTextual() || item.stringValue().isBlank()) throw invalid("Groq response contained an invalid list item.");
+            values.add(item.stringValue().strip());
         }
         return values;
     }

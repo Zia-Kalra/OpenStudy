@@ -322,7 +322,7 @@ public class AssignmentController {
 
     @GetMapping("/{id}")
     public Map<String,Object> detail(@PathVariable long id,HttpSession session) {
-        Identity me=identity(session,"STUDENT");
+        identity(session,"STUDENT");
         Map<String,Object> a=one("SELECT a.assignment_id,a.title,a.instructions,a.due_at,a.max_score,a.attempt_duration_minutes,a.status,s.subject_name FROM assignments a JOIN subjects s ON s.subject_id=a.subject_id WHERE a.assignment_id=? AND a.status='PUBLISHED' AND a.due_at>NOW()",id);
         a.put("questions",db.queryForList("SELECT question_id,question_text,question_type,points,position FROM assignment_questions WHERE assignment_id=? ORDER BY position",id)); return a;
     }
@@ -342,10 +342,11 @@ public class AssignmentController {
     public Map<String,Object> attempt(@PathVariable long submissionId,HttpSession session) {
         Identity me=identity(session,"STUDENT");
         Map<String,Object> attempt=one("SELECT s.submission_id,s.assignment_id,s.status,s.attempt_started_at,s.attempt_expires_at,NOW() server_time,a.title,a.due_at,a.max_score FROM assignment_submissions s JOIN assignments a ON a.assignment_id=s.assignment_id WHERE s.submission_id=? AND s.student_user_id=?",submissionId,me.id());
-        attempt.put("questions",db.queryForList("SELECT q.question_id,q.question_text,q.question_type,q.points,q.position,aa.answer_text FROM assignment_questions q LEFT JOIN assignment_answers aa ON aa.question_id=q.question_id AND aa.submission_id=? WHERE q.assignment_id=? ORDER BY q.position",submissionId,attempt.get("assignment_id")));
-        for (Map<String,Object> question : (List<Map<String,Object>>) attempt.get("questions")) {
+        List<Map<String,Object>> questions = db.queryForList("SELECT q.question_id,q.question_text,q.question_type,q.points,q.position,aa.answer_text FROM assignment_questions q LEFT JOIN assignment_answers aa ON aa.question_id=q.question_id AND aa.submission_id=? WHERE q.assignment_id=? ORDER BY q.position",submissionId,attempt.get("assignment_id"));
+        for (Map<String,Object> question : questions) {
             question.put("attachments", db.queryForList("SELECT ata.attachment_id,ata.original_name,ata.content_type,ata.size_bytes FROM assignment_answer_attachments ata JOIN assignment_answers aa ON aa.answer_id=ata.answer_id WHERE aa.submission_id=? AND aa.question_id=? ORDER BY ata.uploaded_at", submissionId, question.get("question_id")));
         }
+        attempt.put("questions", questions);
         attempt.put("attachments",db.queryForList("SELECT attachment_id,original_name,size_bytes,uploaded_at FROM assignment_attachments WHERE submission_id=?",submissionId));
         return attempt;
     }

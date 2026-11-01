@@ -88,10 +88,10 @@ public class AssignmentAiService {
     }
 
     private Map<String, Object> parseGeneratedQuestion(JsonNode q) {
-        String text = q.path("questionText").asText("").trim();
-        String type = q.path("questionType").asText("");
-        String answer = q.path("modelAnswer").asText("").trim();
-        String rubric = q.path("rubric").asText("").trim();
+        String text = q.path("questionText").stringValue("").trim();
+        String type = q.path("questionType").stringValue("");
+        String answer = q.path("modelAnswer").stringValue("").trim();
+        String rubric = q.path("rubric").stringValue("").trim();
         BigDecimal marks;
         try { marks = q.path("points").decimalValue(); }
         catch (Exception e) { throw new IllegalStateException("Groq returned invalid question marks."); }
@@ -130,7 +130,7 @@ public class AssignmentAiService {
         JsonNode root = request(prompt, suppliedAttachments.isEmpty() ? model : visionModel);
         BigDecimal score;
         try { score = root.path("score").decimalValue(); } catch (Exception e) { throw new IllegalStateException("Groq returned an invalid score."); }
-        String feedback = root.path("feedback").asText("").trim();
+        String feedback = root.path("feedback").stringValue("").trim();
         if (score.signum() < 0 || score.compareTo(maxPoints) > 0 || feedback.isEmpty())
             throw new IllegalStateException("Groq returned an evaluation outside the valid range.");
         return Map.of("score", score, "feedback", feedback,
@@ -140,7 +140,7 @@ public class AssignmentAiService {
 
     private List<String> strings(JsonNode node) {
         List<String> out = new ArrayList<>();
-        if (node.isArray()) node.forEach(v -> { if (v.isTextual()) out.add(v.asText()); });
+        if (node.isArray()) node.forEach(v -> { if (v.isTextual()) out.add(v.stringValue()); });
         return out;
     }
 
@@ -181,7 +181,7 @@ public class AssignmentAiService {
                 content.add(Map.of("type","image_url","image_url",Map.of("url",data)));
             }
             JsonNode response=requestContent(content,visionModel,2000);
-            String transcription=response.path("extractedText").asText("").trim();
+            String transcription=response.path("extractedText").stringValue("").trim();
             if(transcription.isBlank()) throw new IllegalStateException("Groq could not read one or more attached images.");
             extracted.append("\nImage/PDF scan transcription:\n").append(transcription);
         }
@@ -251,7 +251,7 @@ public class AssignmentAiService {
                 }
             }
         }
-        String text = response == null ? "" : response.at("/choices/0/message/content").asText("");
+        String text = response == null ? "" : response.at("/choices/0/message/content").stringValue("");
         try { return json.readTree(text); }
         catch (Exception e) { throw new IllegalStateException("Groq returned malformed JSON."); }
     }

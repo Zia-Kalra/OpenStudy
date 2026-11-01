@@ -74,9 +74,9 @@ public class GroqAIService implements AIService {
                     .body(body).retrieve().body(String.class);
             JsonNode response = parser.parsePayload(raw);
             JsonNode content = response.at("/choices/0/message/content");
-            if (!content.isTextual() || content.asText().isBlank()) throw new AiServiceException(AiErrorCode.EMPTY_RESPONSE, "Groq returned no answer content.");
+            if (!content.isTextual() || content.stringValue().isBlank()) throw new AiServiceException(AiErrorCode.EMPTY_RESPONSE, "Groq returned no answer content.");
             log.debug("Received Groq chat completion for model {}", properties.getModel());
-            return content.asText();
+            return content.stringValue();
         } catch (AiServiceException ex) { throw ex; }
         catch (RestClientResponseException ex) { throw mapHttpError(ex); }
         catch (ResourceAccessException ex) {
