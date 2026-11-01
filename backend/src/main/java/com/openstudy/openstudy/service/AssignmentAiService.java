@@ -71,8 +71,9 @@ public class AssignmentAiService {
                     + " assignment questions about: " + topic
                     + ". Do not repeat or paraphrase any question in this exclusion list: " + exclusionList(excluded)
                     + ". Return JSON object {questions:[{questionText,questionType,modelAnswer,rubric,points}]}. "
-                    + "Use questionType SHORT_TEXT or LONG_TEXT and points " + points + ".";
-            JsonNode questions = request(prompt).path("questions");
+                    + "Use questionType SHORT_TEXT or LONG_TEXT and points " + points
+                    + ". Keep each question, model answer, and rubric concise.";
+            JsonNode questions = requestContent(prompt, model, generationTokenBudget(requested)).path("questions");
             if (!questions.isArray() || questions.size() != requested)
                 throw new IllegalStateException("Groq returned an invalid question list.");
             for (JsonNode question : questions) {
@@ -108,7 +109,11 @@ public class AssignmentAiService {
     }
 
     private String exclusionList(List<String> questions) {
-        return questions.stream().limit(50).map(q -> q.length() > 500 ? q.substring(0, 500) : q).toList().toString();
+        return questions.stream().limit(50).map(q -> q.length() > 160 ? q.substring(0, 160) : q).toList().toString();
+    }
+
+    private int generationTokenBudget(int questionCount) {
+        return Math.min(5500, Math.max(1000, questionCount * 250 + 500));
     }
 
     public Map<String, Object> evaluate(String question, String type, BigDecimal maxPoints,
