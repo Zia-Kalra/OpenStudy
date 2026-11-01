@@ -91,3 +91,7 @@ Thumbs.db
 # Explicit protection for local launch credentials in either workspace layout.
 .vscode/launch.json
 backend/.vscode/launch.json
+
+# Local assignment uploads
+uploads/
+backend/uploads/
