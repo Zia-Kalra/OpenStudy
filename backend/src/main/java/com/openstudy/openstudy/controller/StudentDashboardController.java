@@ -1,8 +1,5 @@
 package com.openstudy.openstudy.controller;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.openstudy.openstudy.model.User;
 import jakarta.servlet.http.HttpSession;
 import java.time.LocalDateTime;
@@ -11,19 +8,19 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 @Controller
 public class StudentDashboardController {
 
-    private static final Logger log = LoggerFactory.getLogger(StudentDashboardController.class);
-    
     private static final ZoneId APP_ZONE = ZoneId.of("Asia/Kolkata");
     private static final DateTimeFormatter DASHBOARD_DATE = DateTimeFormatter.ofPattern("dd MMM yyyy");
     private final JdbcTemplate db;
@@ -38,11 +35,12 @@ public class StudentDashboardController {
         addCurrentUser(model, session);
         model.addAttribute("activePage", "dashboard");
         User user = (User) session.getAttribute("loggedInUser");
-        long studentId = user == null || user.getUserId() == null ? -1L : user.getUserId();
+        Long currentStudentId = user == null ? null : user.getUserId();
+        long studentId = currentStudentId == null ? -1L : currentStudentId.longValue();
         LocalDateTime now = LocalDateTime.now(APP_ZONE);
         LocalDateTime upcomingEnd = now.plusMonths(1);
         LocalDateTime attemptedStart = now.minusMonths(1);
-        Integer pendingAssignments = 0;
+        int pendingAssignments = 0;
         if (db != null) {
             Integer count = db.queryForObject(
                 "SELECT COUNT(*) FROM assignments a "
@@ -52,10 +50,8 @@ public class StudentDashboardController {
                     + "AND s.student_user_id=? AND s.status IN ('SUBMITTED','GRADED'))",
                 Integer.class, now, upcomingEnd, studentId
             );
-            
-            pendingAssignments = count == null ? 0 : count;
+            if (count != null) pendingAssignments = count.intValue();
         }
-        
         int availableQuizzes = 0;
         int completedTasks = 0;
         String averageScore = "—";
@@ -129,8 +125,10 @@ public class StudentDashboardController {
             boolean attempted = "Attempted".equals(assignment.get("assignment_status"));
             Object dateValue = attempted ? assignment.get("submitted_at") : assignment.get("due_at");
             LocalDateTime displayDate = dateValue instanceof java.sql.Timestamp timestamp
-                    ? timestamp.toLocalDateTime() : (LocalDateTime) dateValue;
-            assignment.put("time", (attempted ? "Submitted: " : "Due: ") + displayDate.format(DASHBOARD_DATE));
+                    ? timestamp.toLocalDateTime()
+                    : dateValue instanceof LocalDateTime dateTime ? dateTime : null;
+            assignment.put("time", displayDate == null ? "Date unavailable"
+                    : (attempted ? "Submitted: " : "Due: ") + displayDate.format(DASHBOARD_DATE));
             assignment.put("status", attempted ? "Attempted" : "Pending");
         });
         model.addAttribute("recentAssignments", recentAssignments);
@@ -162,7 +160,8 @@ public class StudentDashboardController {
         addCurrentUser(model, session);
         model.addAttribute("activePage", "results");
         User user = (User) session.getAttribute("loggedInUser");
-        long studentId = user == null || user.getUserId() == null ? -1L : user.getUserId();
+        Long currentStudentId = user == null ? null : user.getUserId();
+        long studentId = currentStudentId == null ? -1L : currentStudentId.longValue();
         List<Map<String, Object>> resultRows = db == null ? List.of() : db.queryForList("SELECT a.title,a.max_score,s.score,s.status,s.evaluation_status,s.graded_at,s.updated_at, "
                 + "(SELECT SUM(COALESCE(aa.final_score,aa.ai_score,0)) FROM assignment_answers aa WHERE aa.submission_id=s.submission_id) evaluated_score, "
                 + "(SELECT MAX(aa.evaluated_at) FROM assignment_answers aa WHERE aa.submission_id=s.submission_id) answer_evaluated_at "
@@ -175,21 +174,25 @@ public class StudentDashboardController {
             java.math.BigDecimal evaluatedScore = (java.math.BigDecimal) row.get("evaluated_score");
             boolean teacherEvaluated = "GRADED".equalsIgnoreCase(String.valueOf(row.get("status")));
             boolean aiEvaluated = "EVALUATED".equalsIgnoreCase(String.valueOf(row.get("evaluation_status")));
-            boolean evaluated = (teacherEvaluated || aiEvaluated) && (score != null || evaluatedScore != null);
+            boolean evaluated = (teacherEvaluated || aiEvaluated) && maxScore != null
+                    && (score != null || evaluatedScore != null);
             String status = "Pending result";
             String marks = "Pending result";
             String date = "—";
             if (evaluated) {
-                java.math.BigDecimal finalScore = teacherEvaluated && score != null ? score : evaluatedScore != null ? evaluatedScore : score;
-                marks = formatMarks(finalScore) + "/" + formatMarks(maxScore);
-                status = finalScore.multiply(java.math.BigDecimal.valueOf(100))
-                        .compareTo(maxScore.multiply(java.math.BigDecimal.valueOf(40))) > 0 ? "Passed" : "Failed";
-                Object evaluatedAt = teacherEvaluated ? row.get("graded_at") : row.get("answer_evaluated_at");
-                if (evaluatedAt == null) evaluatedAt = row.get("updated_at");
-                if (evaluatedAt instanceof java.sql.Timestamp timestamp)
-                    date = timestamp.toLocalDateTime().format(RESULT_DATE);
-                else if (evaluatedAt instanceof java.time.LocalDateTime dateTime)
-                    date = dateTime.format(RESULT_DATE);
+                java.math.BigDecimal finalScore = teacherEvaluated && score != null ? score
+                        : evaluatedScore != null ? evaluatedScore : score;
+                if (finalScore != null) {
+                    marks = formatMarks(finalScore) + "/" + formatMarks(maxScore);
+                    status = finalScore.multiply(java.math.BigDecimal.valueOf(100))
+                            .compareTo(maxScore.multiply(java.math.BigDecimal.valueOf(40))) > 0 ? "Passed" : "Failed";
+                    Object evaluatedAt = teacherEvaluated ? row.get("graded_at") : row.get("answer_evaluated_at");
+                    if (evaluatedAt == null) evaluatedAt = row.get("updated_at");
+                    if (evaluatedAt instanceof java.sql.Timestamp timestamp)
+                        date = timestamp.toLocalDateTime().format(RESULT_DATE);
+                    else if (evaluatedAt instanceof java.time.LocalDateTime dateTime)
+                        date = dateTime.format(RESULT_DATE);
+                }
             }
             return Map.<String, Object>of("title", String.valueOf(row.get("title")), "type", "Assignment",
                     "score", marks, "status", status, "date", date);
@@ -241,6 +244,9 @@ public class StudentDashboardController {
         }
 
         User user = (User) session.getAttribute("loggedInUser");
+        if (user == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Sign in to update your profile.");
+        }
         user.setFullName(normalizedName);
         user.setEmail(normalizedEmail);
         user.setStudentId(normalizedStudentId);
