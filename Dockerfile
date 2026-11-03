@@ -77,4 +77,4 @@ RUN mkdir -p /var/data/uploads/assignments
 
 EXPOSE 10000
 
-CMD ["sh", "-c", "java -Dserver.port=${PORT:-10000} -Dopenstudy.upload-dir=${UPLOAD_DIR} -jar /app/app.war"]
+CMD ["sh", "-c", "base64 -d /etc/secrets/aiven-truststore.jks.b64 > /tmp/aiven-truststore.jks && java -Dserver.port=${PORT:-10000} -Dopenstudy.upload-dir=${UPLOAD_DIR} -jar /app/app.war"]
