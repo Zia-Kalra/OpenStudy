@@ -117,8 +117,9 @@ public class StudentDashboardController {
                 + "WHERE a.status='PUBLISHED' AND ((recent_submission.submitted_at IS NOT NULL) "
                 + "OR (a.due_at BETWEEN ? AND ? AND NOT EXISTS (SELECT 1 FROM assignment_submissions s "
                 + "WHERE s.assignment_id=a.assignment_id AND s.student_user_id=? AND s.status IN ('SUBMITTED','GRADED'))) ) "
-                + "ORDER BY CASE WHEN recent_submission.submitted_at IS NOT NULL THEN 0 ELSE 1 END, "
-                + "COALESCE(recent_submission.submitted_at,a.due_at) DESC LIMIT 10",
+                + "ORDER BY CASE WHEN recent_submission.submitted_at IS NULL THEN 0 ELSE 1 END, "
+                + "CASE WHEN recent_submission.submitted_at IS NULL THEN a.due_at END ASC, "
+                + "CASE WHEN recent_submission.submitted_at IS NOT NULL THEN recent_submission.submitted_at END DESC LIMIT 10",
                 studentId, attemptedStart, now, now, upcomingEnd, studentId);
         recentAssignments.forEach(assignment -> {
             assignment.put("meta", assignment.get("question_count") + " Questions");
@@ -162,7 +163,7 @@ public class StudentDashboardController {
         User user = (User) session.getAttribute("loggedInUser");
         Long currentStudentId = user == null ? null : user.getUserId();
         long studentId = currentStudentId == null ? -1L : currentStudentId.longValue();
-        List<Map<String, Object>> resultRows = db == null ? List.of() : db.queryForList("SELECT a.title,a.max_score,s.score,s.status,s.evaluation_status,s.graded_at,s.updated_at, "
+        List<Map<String, Object>> resultRows = db == null ? List.of() : db.queryForList("SELECT s.submission_id,a.title,a.max_score,s.score,s.status,s.evaluation_status,s.graded_at,s.updated_at, "
                 + "(SELECT SUM(COALESCE(aa.final_score,aa.ai_score,0)) FROM assignment_answers aa WHERE aa.submission_id=s.submission_id) evaluated_score, "
                 + "(SELECT MAX(aa.evaluated_at) FROM assignment_answers aa WHERE aa.submission_id=s.submission_id) answer_evaluated_at "
                 + "FROM assignment_submissions s JOIN assignments a ON a.assignment_id=s.assignment_id "
@@ -195,11 +196,20 @@ public class StudentDashboardController {
                 }
             }
             return Map.<String, Object>of("title", String.valueOf(row.get("title")), "type", "Assignment",
-                    "score", marks, "status", status, "date", date);
+                    "score", marks, "status", status, "date", date,
+                    "submissionId", ((Number) row.get("submission_id")).longValue(), "evaluationAvailable", evaluated);
         }).toList();
         // Quiz results can be merged into this shared row format by the quiz module: title, type, score, status, date.
         model.addAttribute("results", results);
         return "student/results";
+    }
+
+    @GetMapping("/student/results/assignment/{submissionId}")
+    public String assignmentResult(@PathVariable long submissionId, Model model, HttpSession session) {
+        addCurrentUser(model, session);
+        model.addAttribute("activePage", "results");
+        model.addAttribute("submissionId", submissionId);
+        return "student/assignment-result";
     }
 
     private String formatMarks(java.math.BigDecimal value) {

@@ -36,6 +36,7 @@
                     <th scope="col">Marks</th>
                     <th scope="col">Status</th>
                     <th scope="col">Date</th>
+                    <th scope="col">Evaluation</th>
                 </tr>
                 </thead>
                 <tbody>
@@ -51,6 +52,11 @@
                         <td class="os-score"><c:out value="${result.score}"/></td>
                         <td><os:pill status="${result.status}"/></td>
                         <td><c:out value="${result.date}"/></td>
+                        <td>
+                            <c:if test="${result.type == 'Assignment' && result.evaluationAvailable}">
+                                <a class="os-btn os-btn--primary os-btn--sm" href="${base}/student/results/assignment/${result.submissionId}">View result</a>
+                            </c:if>
+                        </td>
                     </tr>
                 </c:forEach>
                 </tbody>

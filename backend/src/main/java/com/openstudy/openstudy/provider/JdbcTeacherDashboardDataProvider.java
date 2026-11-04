@@ -60,7 +60,8 @@ public class JdbcTeacherDashboardDataProvider implements TeacherDashboardDataPro
                         + "UNION SELECT subject_id FROM assignments WHERE created_by=? "
                         + "UNION SELECT subject_id FROM quizzes WHERE created_by=?)", teacherId, teacherId, teacherId),
                 count("SELECT COUNT(*) FROM assignment_submissions s JOIN assignments a ON a.assignment_id=s.assignment_id "
-                        + "WHERE a.created_by=? AND s.status='SUBMITTED'", teacherId));
+                        + "WHERE a.created_by=? AND s.status='SUBMITTED' "
+                        + "AND s.evaluation_status IN ('PENDING','FAILED')", teacherId));
     }
 
     @Override

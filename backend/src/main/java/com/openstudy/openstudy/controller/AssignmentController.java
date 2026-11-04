@@ -320,6 +320,40 @@ public class AssignmentController {
         return result;
     }
 
+    @GetMapping("/student/submissions/{submissionId}/evaluation")
+    public Map<String,Object> studentSubmissionEvaluation(@PathVariable long submissionId,HttpSession session) {
+        Identity me=identity(session,"STUDENT");
+        Map<String,Object> result=one("SELECT s.submission_id,s.status,s.evaluation_status,s.submitted_at,s.graded_at,"
+                + "COALESCE(s.graded_at,(SELECT MAX(aa.evaluated_at) FROM assignment_answers aa WHERE aa.submission_id=s.submission_id)) evaluated_at,"
+                + "a.title,a.max_score,su.subject_name,"
+                + "COALESCE((SELECT SUM(COALESCE(aa.final_score,aa.ai_score,0)) FROM assignment_answers aa WHERE aa.submission_id=s.submission_id),s.score,0) total_score,"
+                + "CASE WHEN s.status='GRADED' THEN 'MANUAL' ELSE 'AI' END evaluation_type "
+                + "FROM assignment_submissions s JOIN assignments a ON a.assignment_id=s.assignment_id "
+                + "JOIN subjects su ON su.subject_id=a.subject_id WHERE s.submission_id=? AND s.student_user_id=? "
+                + "AND s.status IN ('SUBMITTED','GRADED') AND (s.status='GRADED' OR s.evaluation_status='EVALUATED')",submissionId,me.id());
+        List<Map<String,Object>> answers=db.queryForList("SELECT q.question_id,q.position,q.question_text,q.model_answer,q.rubric,q.points,"
+                + "COALESCE(aa.answer_text,'') answer_text,COALESCE(aa.final_score,aa.ai_score) awarded_score,"
+                + "COALESCE(aa.final_feedback,aa.ai_feedback) evaluation_feedback "
+                + "FROM assignment_questions q JOIN assignment_submissions s ON s.assignment_id=q.assignment_id "
+                + "LEFT JOIN assignment_answers aa ON aa.question_id=q.question_id AND aa.submission_id=s.submission_id "
+                + "WHERE s.submission_id=? ORDER BY q.position",submissionId);
+        Map<String,List<Map<String,Object>>> filesByQuestion=new HashMap<>();
+        boolean attachmentsAvailable=true;
+        try {
+            for(Map<String,Object> file:db.queryForList("SELECT aa.question_id,ata.attachment_id,ata.original_name,ata.content_type,ata.size_bytes "
+                    + "FROM assignment_answer_attachments ata JOIN assignment_answers aa ON aa.answer_id=ata.answer_id "
+                    + "WHERE aa.submission_id=? ORDER BY aa.question_id,ata.uploaded_at",submissionId)) {
+                filesByQuestion.computeIfAbsent(String.valueOf(file.get("question_id")),key->new ArrayList<>()).add(file);
+            }
+        } catch(BadSqlGrammarException missingAttachmentMigration) {
+            attachmentsAvailable=false;
+        }
+        answers.forEach(answer->answer.put("attachments",filesByQuestion.getOrDefault(String.valueOf(answer.get("question_id")),List.of())));
+        result.put("answers",answers);
+        result.put("attachments_available",attachmentsAvailable);
+        return result;
+    }
+
     @GetMapping("/{id}")
     public Map<String,Object> detail(@PathVariable long id,HttpSession session) {
         identity(session,"STUDENT");
@@ -485,15 +519,16 @@ public class AssignmentController {
     @GetMapping("/teacher/submissions")
     public List<Map<String,Object>> teacherSubmissions(HttpSession session) {
         identity(session,"TEACHER");
-        try { return db.queryForList("SELECT s.submission_id,a.assignment_id,a.subject_id,su.subject_name,a.title,u.full_name student,s.status,s.evaluation_status,s.submitted_at,s.score FROM assignment_submissions s JOIN assignments a ON a.assignment_id=s.assignment_id JOIN subjects su ON su.subject_id=a.subject_id JOIN users u ON u.user_id=s.student_user_id WHERE s.status IN ('SUBMITTED','GRADED') ORDER BY s.submitted_at DESC"); }
+        try { return db.queryForList("SELECT s.submission_id,a.assignment_id,a.subject_id,su.subject_name,a.title,u.full_name student,s.status,CASE WHEN s.status='GRADED' THEN 'EVALUATED' ELSE s.evaluation_status END evaluation_status,s.submitted_at,s.score FROM assignment_submissions s JOIN assignments a ON a.assignment_id=s.assignment_id JOIN subjects su ON su.subject_id=a.subject_id JOIN users u ON u.user_id=s.student_user_id WHERE s.status IN ('SUBMITTED','GRADED') ORDER BY s.submitted_at DESC"); }
         catch (BadSqlGrammarException e) { throw migrationRequired(e); }
     }
 
     @PostMapping("/{assignmentId}/submissions/{submissionId}/evaluate")
     public Map<String,Object> retryEvaluation(@PathVariable long assignmentId,@PathVariable long submissionId,HttpSession session) {
         identity(session,"TEACHER");
-        one("SELECT submission_id FROM assignment_submissions WHERE submission_id=? AND assignment_id=? AND status IN ('SUBMITTED','GRADED')",submissionId,assignmentId);
-        db.update("UPDATE assignment_submissions SET evaluation_status='PROCESSING' WHERE submission_id=?",submissionId);
+        one("SELECT submission_id FROM assignment_submissions WHERE submission_id=? AND assignment_id=? AND status='SUBMITTED'",submissionId,assignmentId);
+        int started=db.update("UPDATE assignment_submissions SET evaluation_status='PROCESSING' WHERE submission_id=? AND status='SUBMITTED'",submissionId);
+        if(started==0)throw new ResponseStatusException(HttpStatus.CONFLICT,"This submission has already been finalized and cannot be evaluated again.");
         try {
             List<Map<String,Object>> answers=db.queryForList("SELECT aa.answer_id,aa.question_id,aa.answer_text,q.question_text,q.question_type,q.model_answer,q.rubric,q.points FROM assignment_answers aa JOIN assignment_questions q ON q.question_id=aa.question_id WHERE aa.submission_id=?",submissionId);
             for(var ans:answers){
@@ -501,7 +536,7 @@ public class AssignmentController {
                 var ev=ai.evaluate(ans.get("question_text").toString(),ans.get("question_type").toString(),(BigDecimal)ans.get("points"),Objects.toString(ans.get("model_answer"),""),Objects.toString(ans.get("rubric"),""),Objects.toString(ans.get("answer_text"),""),files);
                 db.update("UPDATE assignment_answers SET ai_score=?,ai_feedback=?,evaluated_at=NOW() WHERE answer_id=?",ev.get("score"),ev.get("feedback"),ans.get("answer_id"));
             }
-            db.update("UPDATE assignment_submissions SET evaluation_status='EVALUATED' WHERE submission_id=?",submissionId);
+            db.update("UPDATE assignment_submissions SET evaluation_status='EVALUATED' WHERE submission_id=? AND status='SUBMITTED'",submissionId);
         } catch(DataAccessException e) {
             log.error("Database access failed while evaluating submission {}. Check MySQL connectivity and DNS.",submissionId,e);
             markEvaluationFailed(submissionId);
@@ -537,14 +572,14 @@ public class AssignmentController {
     }
 
     private void markEvaluationFailed(long submissionId) {
-        try { db.update("UPDATE assignment_submissions SET evaluation_status='FAILED' WHERE submission_id=?",submissionId); }
+        try { db.update("UPDATE assignment_submissions SET evaluation_status='FAILED' WHERE submission_id=? AND status='SUBMITTED'",submissionId); }
         catch (RuntimeException e) { log.error("Could not record evaluation failure for submission {} because the database is unavailable.",submissionId,e); }
     }
 
     @GetMapping("/{assignmentId}/submissions/{submissionId}/review")
     public Map<String,Object> review(@PathVariable long assignmentId,@PathVariable long submissionId,HttpSession session) {
         identity(session,"TEACHER");
-        Map<String,Object> s=one("SELECT s.submission_id,s.score,s.feedback,s.status,s.evaluation_status,u.full_name student,a.title assignment FROM assignment_submissions s JOIN users u ON u.user_id=s.student_user_id JOIN assignments a ON a.assignment_id=s.assignment_id WHERE s.submission_id=? AND s.assignment_id=?",submissionId,assignmentId);
+        Map<String,Object> s=one("SELECT s.submission_id,s.score,s.feedback,s.status,CASE WHEN s.status='GRADED' THEN 'EVALUATED' ELSE s.evaluation_status END evaluation_status,u.full_name student,a.title assignment FROM assignment_submissions s JOIN users u ON u.user_id=s.student_user_id JOIN assignments a ON a.assignment_id=s.assignment_id WHERE s.submission_id=? AND s.assignment_id=?",submissionId,assignmentId);
         s.put("answers",db.queryForList("SELECT q.question_id,q.question_text,q.model_answer,q.rubric,q.points,aa.answer_text,aa.ai_score,aa.ai_feedback,aa.final_score,aa.final_feedback FROM assignment_answers aa JOIN assignment_questions q ON q.question_id=aa.question_id WHERE aa.submission_id=? ORDER BY q.position",submissionId));
         s.put("answerAttachments",db.queryForList("SELECT aa.question_id,ata.attachment_id,ata.original_name,ata.content_type,ata.size_bytes,ata.uploaded_at FROM assignment_answer_attachments ata JOIN assignment_answers aa ON aa.answer_id=ata.answer_id WHERE aa.submission_id=? ORDER BY aa.question_id,ata.uploaded_at",submissionId));
         s.put("attachments",db.queryForList("SELECT attachment_id,original_name,content_type,size_bytes,uploaded_at FROM assignment_attachments WHERE submission_id=?",submissionId));return s;
@@ -558,7 +593,7 @@ public class AssignmentController {
         db.update("UPDATE assignment_answers SET final_score=?,final_feedback=?,evaluated_by=?,evaluated_at=NOW() WHERE question_id=? AND submission_id=?",score,feedback,me.id(),questionId,submissionId);
         Integer ungraded = db.queryForObject("SELECT COUNT(*) FROM assignment_answers WHERE submission_id=? AND final_score IS NULL", Integer.class, submissionId);
         if (ungraded == null || ungraded == 0) {
-            db.update("UPDATE assignment_submissions s SET score=(SELECT SUM(final_score) FROM assignment_answers aa WHERE aa.submission_id=s.submission_id),feedback='Teacher reviewed',graded_by=?,graded_at=NOW(),status='GRADED' WHERE submission_id=?",me.id(),submissionId);
+            db.update("UPDATE assignment_submissions s SET score=(SELECT SUM(final_score) FROM assignment_answers aa WHERE aa.submission_id=s.submission_id),feedback='Teacher reviewed',graded_by=?,graded_at=NOW(),status='GRADED',evaluation_status='EVALUATED' WHERE submission_id=?",me.id(),submissionId);
         } else {
             db.update("UPDATE assignment_submissions SET score=(SELECT SUM(COALESCE(final_score,ai_score,0)) FROM assignment_answers WHERE submission_id=?) WHERE submission_id=?",submissionId,submissionId);
         }
