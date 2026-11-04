@@ -24,7 +24,7 @@
     });
   }
 
-  function renderAnswer(answer, index, evaluationType) {
+  function renderAnswer(answer, index) {
     const card = node("article", null, "os-panel student-result-question");
     const heading = node("div", null, "student-result-question__head");
     heading.append(node("h2", `Question ${index + 1}`));
@@ -53,17 +53,11 @@
     }
 
     if (answer.evaluation_feedback) {
-      body.append(node("h3", evaluationType === "MANUAL" ? "Teacher feedback" : "Evaluation feedback"));
+      body.append(node("h3", "Evaluation feedback"));
       body.append(node("p", answer.evaluation_feedback, "student-result-feedback"));
     }
 
-    if (answer.model_answer || answer.rubric) {
-      const details = node("details");
-      details.append(node("summary", "Review the model answer and marking guidance"));
-      if (answer.model_answer) details.append(node("h3", "Model answer"), node("p", answer.model_answer));
-      if (answer.rubric) details.append(node("h3", "Marking guidance"), node("p", answer.rubric));
-      body.append(details);
-    }
+    if (answer.rubric) body.append(node("h3", "Marking guidance"), node("p", answer.rubric));
 
     card.append(body);
     return card;
@@ -83,9 +77,8 @@
       const passed = Number(data.total_score) * 100 > Number(data.max_score) * 40;
       document.getElementById("resultMarks").textContent = total;
       document.getElementById("resultStatus").textContent = passed ? "Passed" : "Failed";
-      document.getElementById("resultType").textContent = data.evaluation_type === "MANUAL" ? "Teacher evaluated" : "AI evaluated";
       summary.hidden = false;
-      answers.replaceChildren(...(data.answers || []).map((answer, index) => renderAnswer(answer, index, data.evaluation_type)));
+      answers.replaceChildren(...(data.answers || []).map((answer, index) => renderAnswer(answer, index)));
       if (!data.answers?.length) answers.append(node("div", "No answers were found for this submission.", "os-empty"));
       message.hidden = true;
     } catch (error) {

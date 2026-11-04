@@ -26,7 +26,6 @@
     <section id="resultSummary" class="student-result-summary" hidden>
         <article class="os-panel"><span>Total marks</span><strong id="resultMarks"></strong></article>
         <article class="os-panel"><span>Result</span><strong id="resultStatus"></strong></article>
-        <article class="os-panel"><span>Evaluation</span><strong id="resultType"></strong></article>
     </section>
     <section id="resultAnswers" class="student-result-answers" aria-label="Evaluated answers"></section>
 </main>
